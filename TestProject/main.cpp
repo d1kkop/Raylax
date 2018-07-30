@@ -2,6 +2,7 @@
 #include "GLinterop.h"
 #include <SDL.h>
 #include <iostream>
+#include <chrono>
 #include "glm/common.hpp"
 #include "glm/geometric.hpp"
 #include "glm/vec3.hpp"
@@ -13,6 +14,7 @@
 using namespace std;
 using namespace glm;
 using namespace Reylax;
+using namespace chrono;
 
 #define LIB_CALL( expr, name ) \
 { \
@@ -27,6 +29,25 @@ using namespace Reylax;
 
 #define SDL_CALL( expr ) LIB_CALL( expr, "SDL" )
 
+double time() { return static_cast<double>(duration_cast<duration<double, milli>>(high_resolution_clock::now().time_since_epoch()).count()); }
+
+struct Profiler
+{
+    double m_start;
+    vector<pair<string,double>> m_items;
+
+    void start() { m_start = time(); }
+    void stop(string name) { m_items.emplace_back(name, time()-m_start); }
+    void showTimings() 
+    {
+        double total=0;
+        printf("---- Timings ---- \n");
+        for ( auto& i : m_items ) { printf("%s:\t\t%.3fms\n", i.first.c_str(), i.second); total += i.second; }
+        printf("Total:\t\t%.3fms\n", total);
+        printf("Fps:  \t\t%.0f\n\n",1000./total);
+    }
+    void clear() { m_items.clear(); }
+};
 
 struct Program
 {
@@ -36,7 +57,7 @@ struct Program
     vec3 m_pos;
 
 
-    void update()
+    void update(Profiler& pr)
     {
         SDL_Event event;
         vec3 move(0);
@@ -92,14 +113,18 @@ struct Program
 
     void render(IRenderTarget* rt, 
                 GLTextureBufferRenderer& glRenderer,
-                GLTextureBufferObject& glTbo)
+                GLTextureBufferObject& glTbo,
+                Profiler& pr)
     {
         u32 err=0;
 
+        pr.start();
         err = rt->lock();
         assert(err==0);
+        pr.stop("Lock");
 
         // Primary rays
+        pr.start();
         {
             mat4 yaw   = rotate(m_pan, vec3(0.f, 1.f, 0.f));
             mat4 pitch = rotate(m_pitch, vec3(1.f, 0.f, 0.f));
@@ -108,12 +133,17 @@ struct Program
             assert(err==0);
         } 
       //  cudaDeviceSynchronize();
+        pr.stop("Trace");
 
+        pr.start();
         err = rt->unlock();
         assert(err==0);
+        pr.stop("Unlock");
 
         // Draw fulls creen quad and copy buffer to gl render target.
+        pr.start();
         glRenderer.render( glTbo );
+        pr.stop("Blit");
     }
 };
 
@@ -146,13 +176,21 @@ int main(int argc, char** argv)
     if ( !rt ) return -1;
 
     // Update loop
+    double tBegin = time();
     Program p;
+    Profiler pr;
     memset( &p, 0, sizeof(p) );
     while ( !p.m_done )
     {
-        p.update();
-        p.render( rt, glRenderer, glRt );
+        p.update( pr );
+        p.render( rt, glRenderer, glRt, pr );
         SDL_GL_SwapWindow(sdl_window);
+        if ( time() - tBegin > 2000.0 )
+        {
+            pr.showTimings();
+            tBegin = time();
+        }
+        pr.clear();
     }
 
     // -- Do cleanup code ---
