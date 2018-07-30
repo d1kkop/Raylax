@@ -259,3 +259,9 @@ paket-files/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
+/3rdParty/Assimp/port/D
+/3rdParty/Assimp/samples
+/3rdParty/Assimp/scripts
+/3rdParty/Assimp/stub
+/3rdParty/glm-0.9.9.0/glm/doc
+/3rdParty/SDL2-2.0.8/docs

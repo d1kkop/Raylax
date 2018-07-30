@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Core">
+      <UniqueIdentifier>{407d0e6f-35bf-4653-9069-17bad258b066}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Kernels">
+      <UniqueIdentifier>{ae235692-630a-487b-83c5-647c8eaf51fd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="3rdParty">
+      <UniqueIdentifier>{8f47765e-b5c7-4e6f-8851-23632e1bb3bd}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="RenderTarget.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="RenderTarget.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\RaytracerCuda\3rdParty\glatter-master\src\glatter\glatter.c">
+      <Filter>3rdParty</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="kernel.cu">
+      <Filter>Kernels</Filter>
+    </CudaCompile>
+  </ItemGroup>
+</Project>
