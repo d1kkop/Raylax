@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.27703.2035
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Reylax", "Reylax\Reylax.vcxproj", "{39E77312-CE00-4695-B392-B0110E6EB695}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{39E77312-CE00-4695-B392-B0110E6EB695}.Debug|x64.ActiveCfg = Debug|x64
+		{39E77312-CE00-4695-B392-B0110E6EB695}.Debug|x64.Build.0 = Debug|x64
+		{39E77312-CE00-4695-B392-B0110E6EB695}.Release|x64.ActiveCfg = Release|x64
+		{39E77312-CE00-4695-B392-B0110E6EB695}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {B84E04E3-5B2E-4B98-9CA9-2BD50FF26062}
+	EndGlobalSection
+EndGlobal
