@@ -15,6 +15,11 @@
     <ClInclude Include="RenderTarget.h">
       <Filter>Core</Filter>
     </ClInclude>
+    <ClInclude Include="ReylaxCuda.h" />
+    <ClInclude Include="ReylaxTypes.h" />
+    <ClInclude Include="Reylax.h" />
+    <ClInclude Include="Reylax_internal.h" />
+    <ClInclude Include="Cuda.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="RenderTarget.cpp">
@@ -23,10 +28,11 @@
     <ClCompile Include="..\..\RaytracerCuda\3rdParty\glatter-master\src\glatter\glatter.c">
       <Filter>3rdParty</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <CudaCompile Include="kernel.cu">
+    <ClCompile Include="RTClear.cpp">
       <Filter>Kernels</Filter>
-    </CudaCompile>
+    </ClCompile>
+    <ClCompile Include="Reylax.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

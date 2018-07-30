@@ -1,18 +1,20 @@
 #pragma once
-#include "Reylax_internal.h"
+#include "Reylax.h"
+#include <cuda_runtime.h>
 
 namespace Reylax
 {
     struct RenderTarget: public IRenderTarget
     {
         RenderTarget(u32 width, u32 height);
-        ~RenderTarget();
+        virtual ~RenderTarget();
 
         u32 lock() override;
         u32 unlock() override;
         void* buffer() const override { return m_buffer; }
         u32 width() const override  { return m_width; }
         u32 height() const override { return m_height; }
+        u32 clear( u32 clearValue ) override;
 
         union
         {

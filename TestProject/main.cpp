@@ -31,6 +31,7 @@ using namespace chrono;
 
 double time() { return static_cast<double>(duration_cast<duration<double, milli>>(high_resolution_clock::now().time_since_epoch()).count()); }
 
+
 struct Profiler
 {
     double m_start;
@@ -38,13 +39,11 @@ struct Profiler
 
     void start() { m_start = time(); }
     void stop(string name) { m_items.emplace_back(name, time()-m_start); }
-    void showTimings() 
+    void showTimings(u32 numFrames)
     {
-        double total=0;
         printf("---- Timings ---- \n");
-        for ( auto& i : m_items ) { printf("%s:\t\t%.3fms\n", i.first.c_str(), i.second); total += i.second; }
-        printf("Total:\t\t%.3fms\n", total);
-        printf("Fps:  \t\t%.0f\n\n",1000./total);
+        for ( auto& i : m_items ) printf("%s:\t\t%.3fms\n", i.first.c_str(), i.second);
+        printf("Fps:  \t\t%d\n\n", numFrames);
     }
     void clear() { m_items.clear(); }
 };
@@ -119,9 +118,23 @@ struct Program
         u32 err=0;
 
         pr.start();
+        err = rt->unlock();
+        assert(err==0);
+        pr.stop("Unlock");
+
+        pr.start();
         err = rt->lock();
         assert(err==0);
         pr.stop("Lock");
+
+        pr.start();
+        for ( int i = 0; i<320; i++ )
+        {
+            err = rt->clear((i*3) | (50<<16));
+            assert(err==0);
+        }
+        rlSyncDevice();
+        pr.stop("Clear");
 
         // Primary rays
         pr.start();
@@ -135,13 +148,11 @@ struct Program
       //  cudaDeviceSynchronize();
         pr.stop("Trace");
 
-        pr.start();
-        err = rt->unlock();
-        assert(err==0);
-        pr.stop("Unlock");
+
 
         // Draw fulls creen quad and copy buffer to gl render target.
         pr.start();
+        //glRenderer.sync();
         glRenderer.render( glTbo );
         pr.stop("Blit");
     }
@@ -151,13 +162,15 @@ struct Program
 int main(int argc, char** argv)
 {
     const char* winTitle = "ReylaxTest";
-    int width  = 500;
-    int height = 500;
+    int width  = 1920;
+    int height = 1080;
 
-    GLTextureBufferObject glRt;
-    GLTextureBufferRenderer glRenderer;
-    IRenderTarget* rt;
-    SDL_Window*   sdl_window;
+    rlSetDevice( rlGetNumDevices()-1 );
+
+    GLTextureBufferObject* glRt=new GLTextureBufferObject();
+    GLTextureBufferRenderer* glRenderer=new GLTextureBufferRenderer();
+    IRenderTarget* rt=nullptr;
+    SDL_Window*   sdl_window=nullptr;
     SDL_Renderer* sdl_renderer;
     SDL_GLContext sdl_glContext;
 
@@ -170,30 +183,41 @@ int main(int argc, char** argv)
     SDL_CALL(SDL_GL_MakeCurrent(sdl_window, sdl_glContext));
 
     // OpenGL interop with Reylax
-    if ( !glRt.init(width, height) ) return -1;
-    if ( !glRenderer.init(width, height) ) return -1;
-    rt = IRenderTarget::createFromGLTBO(glRt.id(), width, height);
+    if ( !glRt->init(width, height) ) return -1;
+    if ( !glRenderer->init(width, height) ) return -1;
+    rt = IRenderTarget::createFromGLTBO(glRt->id(), width, height);
     if ( !rt ) return -1;
 
     // Update loop
-    double tBegin = time();
     Program p;
     Profiler pr;
     memset( &p, 0, sizeof(p) );
+    rt->lock();
+    double tBegin = time();
+    u32 numFrames = 0;
     while ( !p.m_done )
     {
         p.update( pr );
-        p.render( rt, glRenderer, glRt, pr );
+        p.render( rt, *glRenderer, *glRt, pr );
         SDL_GL_SwapWindow(sdl_window);
-        if ( time() - tBegin > 2000.0 )
+        if ( time() - tBegin > 1000.0 )
         {
-            pr.showTimings();
+            pr.showTimings( numFrames );
             tBegin = time();
+            numFrames=0;
         }
         pr.clear();
+        numFrames++;
     }
 
     // -- Do cleanup code ---
+    delete rt;
+    delete glRt;
+    delete glRenderer;
+    SDL_GL_DeleteContext(sdl_glContext);
+    SDL_DestroyRenderer(sdl_renderer);
+    SDL_DestroyWindow(sdl_window);
+    SDL_Quit();
 
     return 0;
 }

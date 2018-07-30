@@ -80,16 +80,18 @@
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <CudaCompile Include="kernel.cu" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="Reylax_internal.h" />
+    <ClInclude Include="Cuda.h" />
+    <ClInclude Include="ReylaxCuda.h" />
+    <ClInclude Include="ReylaxTypes.h" />
     <ClInclude Include="RenderTarget.h" />
     <ClInclude Include="Reylax.h" />
+    <ClInclude Include="Reylax_internal.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\RaytracerCuda\3rdParty\glatter-master\src\glatter\glatter.c" />
     <ClCompile Include="RenderTarget.cpp" />
+    <ClCompile Include="Reylax.cpp" />
+    <CudaCompile Include="RTClear.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

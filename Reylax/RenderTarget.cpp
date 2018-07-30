@@ -1,7 +1,13 @@
 #include "RenderTarget.h"
+#include "Reylax_internal.h"
 #include "../3rdParty/glatter-master/include/glatter/glatter.h"
-//#include <cuda_gl_interop.h>
+#include <cuda_gl_interop.h>
 using namespace Reylax;
+
+extern "C"
+{
+    void rlClear(u32* buffer, u32 samples, u32 clearValue);
+}
 
 
 namespace Reylax
@@ -70,6 +76,13 @@ namespace Reylax
         glUnmapBuffer( GL_TEXTURE_BUFFER );
     #endif
         m_buffer = nullptr;
+        return ERROR_ALL_FINE;
+    }
+
+    u32 RenderTarget::clear(u32 clearValue)
+    {
+        if ( !m_buffer ) return ERROR_LOCK_FIRST;
+        rlClear( (u32*)m_buffer, m_width*m_height, clearValue );
         return ERROR_ALL_FINE;
     }
 }
