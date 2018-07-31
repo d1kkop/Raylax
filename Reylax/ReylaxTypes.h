@@ -22,23 +22,33 @@ namespace Reylax
     constexpr u32 VERTEX_DATA_COUNT         = 10; // This is not a slot
 
 
-    struct rlMaterial
+    struct Material
     {
-        u32 m_texture;
+        u32 texture;
     };
 
-    struct rlFace
+    struct Face
     {
-        rlMaterial* m_mat;
+        u32 material;
         u32 x, y, z, w;
     };
 
-    struct rlMeshData
+    struct MeshData
     {
-        float* m_vertexData[VERTEX_DATA_COUNT];
-        u32  m_vertexDataSizes[VERTEX_DATA_COUNT];
-        u32* m_indices;
-        u32  m_numVertices;
-        u32  m_numIndices;
+        float* vertexData[VERTEX_DATA_COUNT];
+        u32    vertexDataSizes[VERTEX_DATA_COUNT];
+        u32*   indices;
+        u32    numVertices;
+        u32    numIndices;
     };
+
+    struct RayFaceHitResult
+    {
+        float dist, u, v;
+        float ro[3];
+        float rd[3];
+        Face* face;
+    };
+
+    using HitCallback = void (*)(const RayFaceHitResult*, const MeshData*, void**);
 }

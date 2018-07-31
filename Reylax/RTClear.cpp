@@ -1,7 +1,7 @@
 #include "ReylaxCuda.h"
 using namespace Reylax;
 
-#define RL_CLEAR_THREADS 256
+#define CLEAR_THREADS 256
 
 
 // This is faster than writing 4 samples at a time using uint4. 
@@ -16,8 +16,8 @@ GLOBAL void rlClearKernel(u32* buffer, u32 numSamples, u32 cv)
 extern "C"
 void rlClear(u32* buffer, u32 numSamples, u32 clearValue)
 {
-    dim3 blocks ((numSamples+RL_CLEAR_THREADS-1)/RL_CLEAR_THREADS);
-    dim3 threads(RL_CLEAR_THREADS);
+    dim3 blocks ((numSamples+CLEAR_THREADS-1)/CLEAR_THREADS);
+    dim3 threads(CLEAR_THREADS);
 
 #if RL_CUDA
     rlClearKernel<<< blocks, threads >>>
@@ -25,7 +25,7 @@ void rlClear(u32* buffer, u32 numSamples, u32 clearValue)
             buffer, numSamples, clearValue
             );
 #else
-    bDim.x      = RL_CLEAR_THREADS;
+    bDim.x = CLEAR_THREADS;
     for ( u32 b=0; b< blocks.x; b++ )
     {
         bIdx.x = b;

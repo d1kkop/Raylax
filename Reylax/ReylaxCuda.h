@@ -51,19 +51,21 @@ template <typename T> T atomicCAS2(T* lk, T old, T nw) { *lk = nw; return old; }
 
 namespace Reylax
 {
-    template <class T> T min(T a, T b) { return a<b?a:b; }
-    template <class T> T max(T a, T b) { return a>b?a:b; }
+    template <class T> FDEVICE T _min(T a, T b) { return a<b?a:b; }
+    template <class T> FDEVICE T _max(T a, T b) { return a>b?a:b; }
+    template <> FDEVICE vec3 _min(vec3 a, vec3 b) { return vec3(_min<float>(a.x, b.x), _min<float>(a.y, b.y), _min<float>(a.z, b.z)); }
+    template <> FDEVICE vec3 _max(vec3 a, vec3 b) { return vec3(_max<float>(a.x, b.x), _max<float>(a.y, b.y), _max<float>(a.z, b.z)); }
 
     FDEVICE INLINE u32 rgb(float r, float g, float b)
     {
     #if RL_CUDA
-        u32 ru = lrintf(max(0.f, min(255.f, r*255.f)));
-        u32 gu = lrintf(max(0.f, min(255.f, g*255.f)));
-        u32 bu = lrintf(max(0.f, min(255.f, b*255.f)));
+        u32 ru = lrintf(_max(0.f, _min(255.f, r*255.f)));
+        u32 gu = lrintf(_max(0.f, _min(255.f, g*255.f)));
+        u32 bu = lrintf(_max(0.f, _min(255.f, b*255.f)));
     #else 
-        u32 ru = u32(max(0.f, min(255.f, r*255.f)));
-        u32 gu = u32(max(0.f, min(255.f, g*255.f)));
-        u32 bu = u32(max(0.f, min(255.f, b*255.f)));
+        u32 ru = u32(_max(0.f, _min(255.f, r*255.f)));
+        u32 gu = u32(_max(0.f, _min(255.f, g*255.f)));
+        u32 bu = u32(_max(0.f, _min(255.f, b*255.f)));
     #endif
         return (ru<<16)|(gu<<8)|bu;
     }
@@ -73,23 +75,13 @@ namespace Reylax
         return rgb(v.x, v.y, v.z);
     }
 
-    //FDEVICE INLINE float faceRayIntersect(rlFace* face, const vec3& eye, const vec3& dir, const rlMeshData* meshData, float& u, float& v)
-    //{
-    //    assert(meshDataPtrs);
-    //    uint4 idx = face->m_index;
-    //    const rlMeshData* mesh = &meshData[idx.w];
-    //    vec3* vp  = (vec3*)mesh->m_vertexData[VERTEX_DATA_POSITION];
-    //    assert(mesh->m_vertexDataSizes[VERTEX_DATA_POSITION] == 3);
-    //    return bmTriIntersect(eye, dir, vp[idx.x], vp[idx.y], vp[idx.z], u, v);
-    //}
-
-    FDEVICE INLINE vec4 faceInterpolate(rlFace* face, float u, float v, const rlMeshData* meshData, u32 dataIdx)
+    FDEVICE INLINE vec4 interpolate(Face* face, float u, float v, const MeshData* meshData, u32 dataIdx)
     {
         assert(meshData);
         assert(dataIdx < VERTEX_DATA_COUNT);
-        const rlMeshData* mesh = &meshData[face->w];
-        float* vd = mesh->m_vertexData[dataIdx];
-        u32 dsize = mesh->m_vertexDataSizes[dataIdx];
+        const MeshData* mesh = &meshData[face->w];
+        float* vd = mesh->vertexData[dataIdx];
+        u32 dsize = mesh->vertexDataSizes[dataIdx];
         assert(dsize > 0 && dsize < 4);
         float* vd1 = vd + face->x*dsize;
         float* vd2 = vd + face->y*dsize;

@@ -718,6 +718,10 @@
 #	define GLM_VECTOR_CALL
 #endif//GLM_COMPILER
 
+// HACK to get rid of annotation warnings for defaulted constructors
+#undef GLM_HAS_DEFAULTED_FUNCTIONS
+#define GLM_HAS_DEFAULTED_FUNCTIONS 0
+
 #if GLM_HAS_DEFAULTED_FUNCTIONS
 #	define GLM_DEFAULT = default
 

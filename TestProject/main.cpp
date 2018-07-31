@@ -6,6 +6,7 @@
 #include "glm/common.hpp"
 #include "glm/geometric.hpp"
 #include "glm/vec3.hpp"
+#include "glm/vec4.hpp"
 #include "glm/mat3x3.hpp"
 #include "glm/mat4x4.hpp"
 #define GLM_ENABLE_EXPERIMENTAL
@@ -128,7 +129,7 @@ struct Program
         pr.stop("Lock");
 
         pr.start();
-        for ( int i = 0; i<320; i++ )
+        for ( int i = 0; i<32; i++ )
         {
             err = rt->clear((i*3) | (50<<16));
             assert(err==0);
