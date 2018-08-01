@@ -1,9 +1,55 @@
 #pragma once
 #include "ReylaxCuda.h"
+#include <vector>
+
+#define RL_INVALID_INDEX ((u32)-1)
+#define RL_VALID_INDEX( idx ) (idx!=RL_INVALID_INDEX)
+
+#define BVH_NUM_FACES_IN_LEAF 64
+#define BVH_ISLEAF( idx ) ((idx>>31)==1)
+#define BVH_GETNUM_TRIANGLES(idx) (idx&0x7FFFFFF)
+#define BVH_MAX_DEPTH 32
 
 
 namespace Reylax
 {
+    struct FaceCluster
+    {
+        Face* faces[BVH_NUM_FACES_IN_LEAF];
+        FDEVICE INLINE Face* getFace(u32 idx) const
+        {
+            assert(idx < BVH_NUM_FACES_IN_LEAF);
+            return faces[idx];
+        }
+    };
+
+    struct BvhNode
+    {
+        vec3 hs, cp;
+        u32 left, right;
+
+        FDEVICE bool isLeaf() const
+        {
+            return BVH_ISLEAF(left);
+        }
+
+        FDEVICE u32 numFaces() const
+        {
+            assert(isLeaf());
+            return BVH_GETNUM_TRIANGLES(left);
+        }
+
+        FDEVICE Face* getFace(FaceCluster* faceClusters, u32 idx) const
+        {
+            assert(isLeaf());
+            FaceCluster* fc = faceClusters + right;
+            return fc->getFace(idx);
+        }
+
+        static u32 build( const MeshData* meshData, u32 numMeshDatas );
+        static u32 step( BvhNode* node, u32 nodeIdx, u32 depth, const MeshData* meshData, std::vector<Face> facesCopy );
+    };
+
     template <typename T>
     struct Store
     {

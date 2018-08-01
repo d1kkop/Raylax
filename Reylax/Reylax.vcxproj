@@ -80,6 +80,7 @@
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="BoxTriangle.cpp" />
     <ClInclude Include="Cuda.h" />
     <ClInclude Include="ReylaxCommon.h" />
     <ClInclude Include="ReylaxCuda.h" />
@@ -90,10 +91,15 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\RaytracerCuda\3rdParty\glatter-master\src\glatter\glatter.c" />
+    <ClCompile Include="Benchmark.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="BvhNode.cpp" />
     <ClCompile Include="RenderTarget.cpp" />
     <ClCompile Include="Reylax.cpp" />
-    <CudaCompile Include="Tracer.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    <CudaCompile Include="KTracer.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
     </CudaCompile>
     <CudaCompile Include="RTClear.cpp" />

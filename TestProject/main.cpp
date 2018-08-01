@@ -69,7 +69,7 @@ struct Program
             switch ( event.type )
             {
             case SDL_KEYDOWN:
-                if ( event.key.keysym.sym == SDLK_ESCAPE ) return;
+                if ( event.key.keysym.sym == SDLK_ESCAPE ) m_done=true;
                 if ( event.key.keysym.sym == SDLK_a ) kds[0]=true;
                 if ( event.key.keysym.sym == SDLK_d ) kds[1]=true;
                 if ( event.key.keysym.sym == SDLK_w ) kds[2]=true;
@@ -129,7 +129,7 @@ struct Program
         pr.stop("Lock");
 
         pr.start();
-        for ( int i = 0; i<32; i++ )
+        for ( int i = 0; i<1; i++ )
         {
             err = rt->clear((i*3) | (50<<16));
             assert(err==0);

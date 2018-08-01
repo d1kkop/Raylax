@@ -1,12 +1,8 @@
 #include "ReylaxCommon.h"
 
 #define MAX_HITS_PER_RAY 16
-#define NUM_FACES_IN_LEAF 64
-
-#define IS_LEAF( idx ) ((idx>>31)==1)
-#define INVALID_INDEX ((u32)-1)
-#define VALID( idx ) (idx!=INVALID_INDEX)
-#define NUM_TRIANGLES(idx) (idx&0x7FFFFFF)
+#define NUM_RAYBOX_QUEUES 32
+#define NUM_LEAF_QUEUES 32
 
 
 namespace Reylax
@@ -28,44 +24,10 @@ namespace Reylax
         Face* face;
     };
 
-    struct FaceCluster
-    {
-        Face* faces[NUM_FACES_IN_LEAF];
-        FDEVICE INLINE Face* getFace(u32 idx) const
-        {
-            assert(idx < NUM_FACES_IN_LEAF);
-            return faces[idx];
-        }
-    };
-
     struct RayFaceHitCluster
     {
         RayFaceHitResult results[MAX_HITS_PER_RAY];
         u32 count;
-    };
-
-    struct BvhNode
-    {
-        vec3 hs, cp;
-        u32 left, right;
-
-        FDEVICE bool isLeaf() const
-        {
-            return IS_LEAF(left);
-        }
-
-        FDEVICE u32 numFaces() const
-        {
-            assert(isLeaf());
-            return NUM_TRIANGLES(left);
-        }
-
-        FDEVICE Face* getFace(FaceCluster* faceClusters, u32 idx) const
-        {
-            assert(isLeaf());
-            FaceCluster* fc = faceClusters + right;
-            return fc->getFace(idx);
-        }
     };
 
 
@@ -99,7 +61,7 @@ namespace Reylax
             else
             {
                 // both must be valid
-                assert(VALID(node->left) && VALID(node->right));
+                assert(RL_VALID_INDEX(node->left) && RL_VALID_INDEX(node->right));
                 // create 2 new ray/box queries
                 RayBox* rbNew = rayBoxQueueOut->getNew(2);
                 rbNew->ray  = rb->ray;
@@ -108,6 +70,17 @@ namespace Reylax
                 (rbNew+1)->node = node->right;
             }
         }
+    }
+
+    GLOBAL void RayBoxQueueStichKernel(u32 numInnerQueues,
+                                       Store<RayBox>* rayBoxQueueIn,
+                                       Store<RayBox>* rayBoxQueueOut,
+                                       Store<u32>* leafQueue,
+                                       Ray* rayBuffer,
+                                       BvhNode* bvhNodes)
+    {
+        u32 i = bIdx.x * bDim.x + tIdx.x;
+        if ( i >= numInnerQueues ) return;
     }
 
     GLOBAL void LeafExpandKernel(u32 numLeafs,
@@ -179,7 +152,7 @@ namespace Reylax
         RayFaceHitResult* results     = hitCluster->results;
         u32 count   = hitCluster->count;
         float fDist = FLT_MAX;
-        u32 closest = INVALID_INDEX;
+        u32 closest = RL_INVALID_INDEX;
         for ( u32 k=0; k<count; ++k )
         {
             RayFaceHitResult* result = results + k;
@@ -190,7 +163,7 @@ namespace Reylax
             }
         }
         RayFaceHitResult* finResult = finalResults + i;
-        if ( VALID(closest) )
+        if ( RL_VALID_INDEX(closest) )
         {
             memcpy( finResult, results + closest, sizeof(RayFaceHitResult) );
         }
