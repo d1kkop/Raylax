@@ -193,16 +193,16 @@ struct GLTextureBufferRenderer
     }
 
 
-    private:
-        void showCompileError(bool shaderOrProgramError, u32 id)
-        {
-            GLsizei log_length = 0;
-            GLchar message[1024];
-            if ( shaderOrProgramError ) glGetShaderInfoLog(id, 1024, &log_length, message);
-            else glGetProgramInfoLog(id, 1024, &log_length, message);
-            std::cout << message << std::endl;
-            assert(false);
-        }
+ private:
+     void showCompileError(bool shaderOrProgramError, u32 id)
+     {
+         GLsizei log_length = 0;
+         GLchar message[1024];
+         if ( shaderOrProgramError ) glGetShaderInfoLog(id, 1024, &log_length, message);
+         else glGetProgramInfoLog(id, 1024, &log_length, message);
+         std::cout << message << std::endl;
+         assert(false);
+     }
 
     bool m_initialized;
     u32 m_GLvertexShader;

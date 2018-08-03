@@ -29,8 +29,8 @@ namespace Reylax
 
     struct Face
     {
-        u32 material;
         u32 x, y, z, w;
+        Material* mat;
     };
 
     struct MeshData
@@ -40,6 +40,7 @@ namespace Reylax
         u32*   indices;
         u32    numVertices;
         u32    numIndices;
+        Material* material;
     };
 
     struct RayFaceHitResult

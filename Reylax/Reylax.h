@@ -37,7 +37,7 @@ namespace Reylax
     };
 
 
-    RL_DLL void rlSetDevice(u32 i);
-    RL_DLL u32  rlGetNumDevices();
-    RL_DLL void rlSyncDevice();
+    RL_DLL void setDevice(u32 i);
+    RL_DLL u32  getNumDevices();
+    RL_DLL void syncDevice();
 }

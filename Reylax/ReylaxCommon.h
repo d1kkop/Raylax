@@ -13,10 +13,14 @@
 
 namespace Reylax
 {
+     struct DeviceBuffer;
+
+
     struct FaceCluster
     {
-        Face* faces[BVH_NUM_FACES_IN_LEAF];
-        FDEVICE INLINE Face* getFace(u32 idx) const
+        u32 faces[BVH_NUM_FACES_IN_LEAF];
+        u32 numFaces;
+        FDEVICE INLINE u32 getFace(u32 idx) const
         {
             assert(idx < BVH_NUM_FACES_IN_LEAF);
             return faces[idx];
@@ -39,15 +43,17 @@ namespace Reylax
             return BVH_GETNUM_TRIANGLES(left);
         }
 
-        FDEVICE Face* getFace(FaceCluster* faceClusters, u32 idx) const
+        FDEVICE u32 getFace(FaceCluster* faceClusters, u32 idx) const
         {
             assert(isLeaf());
             FaceCluster* fc = faceClusters + right;
             return fc->getFace(idx);
         }
 
-        static u32 build( const MeshData* meshData, u32 numMeshDatas );
-        static u32 step( BvhNode* node, u32 nodeIdx, u32 depth, const MeshData* meshData, std::vector<Face> facesCopy );
+        static u32 build( const MeshData* meshData, u32 numMeshDatas, 
+                          DeviceBuffer** ppBvhTree,
+                          DeviceBuffer** ppFaces,
+                          DeviceBuffer** ppFaceClusters );
     };
 
     template <typename T>

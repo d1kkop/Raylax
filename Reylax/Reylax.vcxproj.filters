@@ -31,8 +31,8 @@
     <ClInclude Include="ReylaxTypes.h">
       <Filter>User</Filter>
     </ClInclude>
-    <ClInclude Include="BoxTriangle.cpp">
-      <Filter>Core\3rdParty</Filter>
+    <ClInclude Include="DeviceBuffer.h">
+      <Filter>Core</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -49,6 +49,10 @@
       <Filter>Kernels</Filter>
     </ClCompile>
     <ClCompile Include="BvhNode.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="BoxTriangle.cpp" />
+    <ClCompile Include="DeviceBuffer.cpp">
       <Filter>Core</Filter>
     </ClCompile>
   </ItemGroup>

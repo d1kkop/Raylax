@@ -1,9 +1,6 @@
-#include "CudaComon.cuh"
-#include "SharedTypes.h"
-#include <iostream>
-#include <cassert>
-using namespace Beam;
+#include "ReylaxCuda.h"
 using namespace std;
+using namespace glm;
 
 /********************************************************/
 
@@ -55,7 +52,7 @@ using namespace std;
   if(x2>_max) _max=x2;
 
 FDEVICE
-int planeBoxOverlap(float normal[3], float vert[3], float maxbox[3])	// -NJMP-
+int planeBoxOverlap(const float normal[3], const float vert[3], const float maxbox[3])	// -NJMP-
 {
   int q;
   float vmin[3],vmax[3],v;
@@ -131,8 +128,7 @@ int planeBoxOverlap(float normal[3], float vert[3], float maxbox[3])	// -NJMP-
 	if(_min>rad || _max<-rad) return 0;
 
 
-extern "C"
- int rlTriBoxOverlap(const float* boxcenter, const float* boxhalfsize, const vec3 triverts[3])
+int rlTriBoxOverlap(const float* boxcenter, const float* boxhalfsize, const vec3 triverts[3])
 {
     /*    use separating axis theorem to test overlap between triangle and box */
     /*    need to test for overlap in these directions: */

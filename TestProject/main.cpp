@@ -134,7 +134,7 @@ struct Program
             err = rt->clear((i*3) | (50<<16));
             assert(err==0);
         }
-        rlSyncDevice();
+        syncDevice();
         pr.stop("Clear");
 
         // Primary rays
@@ -166,7 +166,7 @@ int main(int argc, char** argv)
     int width  = 1920;
     int height = 1080;
 
-    rlSetDevice( rlGetNumDevices()-1 );
+    setDevice( getNumDevices()-1 );
 
     GLTextureBufferObject* glRt=new GLTextureBufferObject();
     GLTextureBufferRenderer* glRenderer=new GLTextureBufferRenderer();

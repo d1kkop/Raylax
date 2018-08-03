@@ -21,7 +21,7 @@ namespace Reylax
     struct RayFace
     {
         u32 ray;
-        Face* face;
+        u32 face;
     };
 
     struct RayFaceHitCluster
@@ -110,17 +110,19 @@ namespace Reylax
                                Ray* rayBuffer,
                                Store<RayFace>* rayFaceQueue,
                                FaceCluster* faceClusters,
+                               Face* faceBuffer,
                                RayFaceHitCluster* hitResultClusters,
                                MeshData* meshData)
     {
         u32 i = bIdx.x * bDim.x + tIdx.x;
         if ( i >= numRayFaceQueries ) return;
         RayFace* rf = rayFaceQueue->get(i);
-        Ray* ray = rayBuffer + rf->ray;
-        vec3 d   = ray->d;
-        vec3 o   = ray->o;
+        Ray* ray    = rayBuffer + rf->ray;
+        Face* face  = faceBuffer + rf->face;
+        vec3 d = ray->d;
+        vec3 o = ray->o;
         float u, v;
-        float dist = FaceRayIntersect(rf->face, o, d, meshData, u, v);
+        float dist = FaceRayIntersect(face, o, d, meshData, u, v);
         if ( dist != FLT_MAX )
         {
             RayFaceHitCluster* hitCluster = hitResultClusters + rf->ray;
@@ -132,7 +134,7 @@ namespace Reylax
                 result->u = u;
                 result->v = v;
                 result->dist = dist;
-                result->face = rf->face;
+                result->face = face;
                 for ( u32 i=0; i<3; ++i )
                 {
                     result->ro[i] = o[i];

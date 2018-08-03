@@ -80,8 +80,9 @@
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="BoxTriangle.cpp" />
+    <ClCompile Include="BoxTriangle.cpp" />
     <ClInclude Include="Cuda.h" />
+    <ClInclude Include="DeviceBuffer.h" />
     <ClInclude Include="ReylaxCommon.h" />
     <ClInclude Include="ReylaxCuda.h" />
     <ClInclude Include="ReylaxTypes.h" />
@@ -96,6 +97,7 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="BvhNode.cpp" />
+    <ClCompile Include="DeviceBuffer.cpp" />
     <ClCompile Include="RenderTarget.cpp" />
     <ClCompile Include="Reylax.cpp" />
     <CudaCompile Include="KTracer.cpp">
