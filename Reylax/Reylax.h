@@ -36,6 +36,34 @@ namespace Reylax
         template <class T> T* buffer() const { return reinterpret_cast<T*>(buffer()); }
     };
 
+    struct IMesh
+    {
+        RL_DLL static IMesh* create();
+        virtual u32 setVertexData(const float* vertices, u32 numVertices, u32 numComponents, u32 slotId) = 0;
+        virtual u32 setIndices(const u32* indices, u32 numIndices) = 0;
+    };
+
+    struct IGpuStaticScene
+    {
+        RL_DLL static IGpuStaticScene* create(IMesh* const * meshes, u32 numMeshes);
+    };
+
+    struct ITraceQuery
+    {
+        RL_DLL static ITraceQuery* create(const float* rays3, u32 numRays);
+    };
+
+    struct ITraceResult
+    {
+        RL_DLL static ITraceResult* create(u32 numRays);
+    };
+
+    struct ITracer
+    {
+        RL_DLL static ITracer* create();
+        virtual u32 trace( const IGpuStaticScene* scene, const ITraceQuery* query, const ITraceResult** results, u32 numResults ) = 0;
+    };
+
 
     RL_DLL void setDevice(u32 i);
     RL_DLL u32  getNumDevices();

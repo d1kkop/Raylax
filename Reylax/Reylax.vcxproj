@@ -83,6 +83,8 @@
     <ClCompile Include="BoxTriangle.cpp" />
     <ClInclude Include="Cuda.h" />
     <ClInclude Include="DeviceBuffer.h" />
+    <ClInclude Include="SmallGpuStructs.h" />
+    <ClInclude Include="Mesh.h" />
     <ClInclude Include="ReylaxCommon.h" />
     <ClInclude Include="ReylaxCuda.h" />
     <ClInclude Include="ReylaxTypes.h" />
@@ -98,6 +100,8 @@
     </ClCompile>
     <ClCompile Include="BvhNode.cpp" />
     <ClCompile Include="DeviceBuffer.cpp" />
+    <ClCompile Include="SmallGpuStructs.cpp" />
+    <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="RenderTarget.cpp" />
     <ClCompile Include="Reylax.cpp" />
     <CudaCompile Include="KTracer.cpp">

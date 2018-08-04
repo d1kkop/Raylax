@@ -50,7 +50,7 @@ namespace Reylax
             return fc->getFace(idx);
         }
 
-        static u32 build( const MeshData* meshData, u32 numMeshDatas, 
+        static u32 build( const MeshData** meshData, u32 numMeshDatas, 
                           DeviceBuffer** ppBvhTree,
                           DeviceBuffer** ppFaces,
                           DeviceBuffer** ppFaceClusters );

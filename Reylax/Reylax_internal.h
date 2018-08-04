@@ -3,6 +3,8 @@
 #include <iostream>
 #include <functional>
 
+#define RL_PRINT_STATS 1
+
 #define RL_CUDA_CALL( expr ) \
 { \
 	if ( expr != cudaSuccess )  \
@@ -16,5 +18,5 @@
 
 namespace Reylax
 {
-    void forEachFace(const MeshData* md, u32 numMeshDatas, const std::function<void (u32, const u32[3], const vec3[3])>& cb);
+    void forEachFace(const MeshData** md, u32 numMeshDatas, const std::function<void (u32, const u32[3], const vec3[3])>& cb);
 }

@@ -31,6 +31,7 @@ using namespace chrono;
 #define SDL_CALL( expr ) LIB_CALL( expr, "SDL" )
 
 double time() { return static_cast<double>(duration_cast<duration<double, milli>>(high_resolution_clock::now().time_since_epoch()).count()); }
+bool loadModel(const std::string& name, vector<IMesh*>& meshes);
 
 
 struct Profiler
@@ -49,13 +50,13 @@ struct Profiler
     void clear() { m_items.clear(); }
 };
 
+
 struct Program
 {
-    bool m_done;
-    float m_pan;
-    float m_pitch;
-    vec3 m_pos;
-
+    bool  loopDone;
+    float camPan;
+    float camPitch;
+    vec3  camPos;
 
     void update(Profiler& pr)
     {
@@ -69,7 +70,7 @@ struct Program
             switch ( event.type )
             {
             case SDL_KEYDOWN:
-                if ( event.key.keysym.sym == SDLK_ESCAPE ) m_done=true;
+                if ( event.key.keysym.sym == SDLK_ESCAPE ) loopDone=true;
                 if ( event.key.keysym.sym == SDLK_a ) kds[0]=true;
                 if ( event.key.keysym.sym == SDLK_d ) kds[1]=true;
                 if ( event.key.keysym.sym == SDLK_w ) kds[2]=true;
@@ -88,12 +89,12 @@ struct Program
                 break;
 
             case SDL_MOUSEMOTION:
-                m_pan += event.motion.xrel * mspeed;
-                m_pitch += event.motion.yrel * mspeed;
+                camPan += event.motion.xrel * mspeed;
+                camPitch += event.motion.yrel * mspeed;
                 break;
 
             case SDL_QUIT:
-                m_done=true;
+                loopDone=true;
                 break;
             }
         }
@@ -103,15 +104,19 @@ struct Program
         if ( kds[2] ) move.z += speed;
         if ( kds[3] ) move.z -= speed;
 
-        mat4 yaw   = glm::rotate(m_pan, vec3(0.f, 1.f, 0.f));
-        mat4 pitch = glm::rotate(m_pitch, vec3(1.f, 0.f, 0.f));
+        mat4 yaw   = glm::rotate(camPan, vec3(0.f, 1.f, 0.f));
+        mat4 pitch = glm::rotate(camPitch, vec3(1.f, 0.f, 0.f));
         mat3 orient = (yaw * pitch);
-        m_pos += orient*move;
-        if ( kds[4] ) m_pos.y += speed;
-        if ( kds[5] ) m_pos.y -= speed;
+        camPos += orient*move;
+        if ( kds[4] ) camPos.y += speed;
+        if ( kds[5] ) camPos.y -= speed;
     }
 
     void render(IRenderTarget* rt, 
+                IGpuStaticScene* scene,
+                ITraceQuery* query,
+                ITraceResult* result,
+                ITracer* tracer,
                 GLTextureBufferRenderer& glRenderer,
                 GLTextureBufferObject& glTbo,
                 Profiler& pr)
@@ -140,8 +145,8 @@ struct Program
         // Primary rays
         pr.start();
         {
-            mat4 yaw   = rotate(m_pan, vec3(0.f, 1.f, 0.f));
-            mat4 pitch = rotate(m_pitch, vec3(1.f, 0.f, 0.f));
+            mat4 yaw   = rotate(camPan, vec3(0.f, 1.f, 0.f));
+            mat4 pitch = rotate(camPitch, vec3(1.f, 0.f, 0.f));
             mat3 orient = ( yaw * pitch );
   //          err = m_camera->traceScene(&m_pos.x, &orient[0][0], m_scene);
             assert(err==0);
@@ -160,6 +165,32 @@ struct Program
 };
 
 
+// Setup a camera directions in local space
+vec3* createPrimaryRays(u32 width, u32 height, float left, float right, float top, float bottom, float zoom)
+{
+    assert(width*height!=0);
+    float dx = (right-left) / width;
+    float dy = (bottom-top) / height;
+    float ry = top + dy*.5f;
+    float z2 = zoom*zoom;
+    vec3* dirs = new vec3[width*height];
+    for ( u32 y=0; y<height; y++, ry += dy )
+    {
+        float rx = left + dx*.5f;
+        for ( u32 x=0; x<width; x++, rx += dx )
+        {
+            float d = 1.f / sqrt(z2 + rx*rx + ry*ry);
+            assert(!(::isnan(d) || d <= 0.f));
+            auto addr = y*width+x;
+            dirs[addr].x = rx*d;
+            dirs[addr].y = ry*d;
+            dirs[addr].z = zoom*d;
+        }
+    }
+    return dirs;
+}
+
+
 int main(int argc, char** argv)
 {
     const char* winTitle = "ReylaxTest";
@@ -168,14 +199,10 @@ int main(int argc, char** argv)
 
     setDevice( getNumDevices()-1 );
 
-    GLTextureBufferObject* glRt=new GLTextureBufferObject();
-    GLTextureBufferRenderer* glRenderer=new GLTextureBufferRenderer();
-    IRenderTarget* rt=nullptr;
+    // Window management (SDL)
     SDL_Window*   sdl_window=nullptr;
     SDL_Renderer* sdl_renderer;
     SDL_GLContext sdl_glContext;
-
-    // Create sdl render window (with openGL)
     SDL_CALL(SDL_Init(SDL_INIT_VIDEO));
     u32 flags     = SDL_WINDOW_OPENGL;// | SDL_WINDOW_FULLSCREEN;
     sdl_window    = SDL_CreateWindow(winTitle, 100, 100, width, height, flags);
@@ -183,11 +210,44 @@ int main(int argc, char** argv)
     sdl_glContext = SDL_GL_CreateContext(sdl_window);
     SDL_CALL(SDL_GL_MakeCurrent(sdl_window, sdl_glContext));
 
-    // OpenGL interop with Reylax
+    // GL interop with Cuda. We want our filled framebuffer to be shaded to the backbuffer without copy to host memory.
+    GLTextureBufferObject* glRt=new GLTextureBufferObject();
+    GLTextureBufferRenderer* glRenderer=new GLTextureBufferRenderer();
     if ( !glRt->init(width, height) ) return -1;
     if ( !glRenderer->init(width, height) ) return -1;
+
+    IRenderTarget* rt;
+    IGpuStaticScene* scene;
+    ITraceQuery* query;
+    ITraceResult* result;
+    ITracer* tracer;
+    vector<IMesh*> meshes;
+
+    // Create render target from a OpenGL texture buffer object
     rt = IRenderTarget::createFromGLTBO(glRt->id(), width, height);
-    if ( !rt ) return -1;
+    assert(rt);
+
+    // Load test model
+    if ( !loadModel(R"(D:\_Programming\2018\RaytracerCuda\Content/f16.obj)", meshes) )
+    {
+        cout << "Failed to load f16" << endl;
+    }
+    scene = IGpuStaticScene::create(meshes.data(), (u32)meshes.size());
+    assert(scene);
+    for (auto& m : meshes) delete m;
+
+    // All primary rays only have a direction, set this up.
+    vec3* rays = createPrimaryRays(width, height, -1, 1, 1, -1, 1);
+    query = ITraceQuery::create( (float*) rays, width*height );
+    assert(query);
+    delete [] rays;
+
+    // Each trace has a trace result
+    result = ITraceResult::create( width*height );
+    assert(result);
+
+    // Create the actual tracer
+    tracer = ITracer::create();
 
     // Update loop
     Program p;
@@ -196,10 +256,10 @@ int main(int argc, char** argv)
     rt->lock();
     double tBegin = time();
     u32 numFrames = 0;
-    while ( !p.m_done )
+    while ( !p.loopDone )
     {
         p.update( pr );
-        p.render( rt, *glRenderer, *glRt, pr );
+        p.render( rt, scene, query, result, tracer, *glRenderer, *glRt, pr );
         SDL_GL_SwapWindow(sdl_window);
         if ( time() - tBegin > 1000.0 )
         {
@@ -212,6 +272,9 @@ int main(int argc, char** argv)
     }
 
     // -- Do cleanup code ---
+    delete result;
+    delete query;
+    delete scene;
     delete rt;
     delete glRt;
     delete glRenderer;

@@ -34,6 +34,12 @@
     <ClInclude Include="DeviceBuffer.h">
       <Filter>Core</Filter>
     </ClInclude>
+    <ClInclude Include="Mesh.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="SmallGpuStructs.h">
+      <Filter>Core</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="RenderTarget.cpp">
@@ -53,6 +59,12 @@
     </ClCompile>
     <ClCompile Include="BoxTriangle.cpp" />
     <ClCompile Include="DeviceBuffer.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Mesh.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="SmallGpuStructs.cpp">
       <Filter>Core</Filter>
     </ClCompile>
   </ItemGroup>
