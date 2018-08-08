@@ -29,6 +29,14 @@ namespace Reylax
 
     struct BvhNode
     {
+        // create stack
+        struct stNode
+        {
+            u32 parentIdx, depth;
+            std::vector<Face> faces;
+            vec3 bMin, bMax;
+        };
+
         vec3 hs, cp;
         u32 left, right;
 
@@ -54,6 +62,10 @@ namespace Reylax
                           DeviceBuffer** ppBvhTree,
                           DeviceBuffer** ppFaces,
                           DeviceBuffer** ppFaceClusters );
+
+        static void determineBbox(BvhNode::stNode* st, const MeshData** meshData, vec3& bMin, vec3& bMax, vec3& centre);
+
+        static void showDebugInfo( const BvhNode* nodes );
     };
 
     template <typename T>

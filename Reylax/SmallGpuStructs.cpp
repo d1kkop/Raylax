@@ -9,7 +9,7 @@ using namespace std;
 
 namespace Reylax
 {
-        // ------ GpuStaticScene ----------------------------------------------------------------------------------------
+    // ------ GpuStaticScene ----------------------------------------------------------------------------------------
 
     IGpuStaticScene* IGpuStaticScene::create(IMesh* const* meshes, u32 numMeshes)
     {
@@ -25,9 +25,9 @@ namespace Reylax
         GpuStaticScene* gpuScene = new GpuStaticScene();
 
         u32 err = BvhNode::build(mds.data(), (u32)mds.size(),
-                            &gpuScene->m_bvhTree,
-                            &gpuScene->m_faces,
-                            &gpuScene->m_faceClusters);
+                                 &gpuScene->m_bvhTree,
+                                 &gpuScene->m_faces,
+                                 &gpuScene->m_faceClusters);
 
         if ( err != ERROR_ALL_FINE )
         {
