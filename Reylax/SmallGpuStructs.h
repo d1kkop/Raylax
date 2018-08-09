@@ -20,7 +20,8 @@ namespace Reylax
         TraceQuery(const float* rays3, u32 numRays);
         virtual ~TraceQuery();
 
-        DeviceBuffer* m_query;
+        DeviceBuffer* m_oris;
+        DeviceBuffer* m_dirs;
     };
 
     struct TraceResult: public ITraceResult
@@ -32,9 +33,17 @@ namespace Reylax
 
     struct Tracer: public ITracer
     {
-        Tracer();
+        Tracer(u32 numRayBoxQueries=256*256*256, u32 numLeafQueries=256*256*256);
         virtual ~Tracer();
+        void resetRayBoxQueue( u32 idx );
+        void resetRayLeafQueue();
+        u32 trace( const float* eye3, const float* orient3x3, const IGpuStaticScene* scene, const ITraceQuery* query, const ITraceResult* const* results, u32 numResults ) override;
 
-        u32 trace( const IGpuStaticScene* scene, const ITraceQuery* query, const ITraceResult** results, u32 numResults ) override;
+        DeviceBuffer* m_rayBoxQueue[2];
+        DeviceBuffer* m_leafQueue;
+        DeviceBuffer* m_rayBoxBuffer[2];
+        DeviceBuffer* m_leafBuffer;
+        u32 m_numRayBoxQueries;
+        u32 m_numRayLeafQueries;
     };
 }

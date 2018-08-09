@@ -9,13 +9,43 @@
 #define BVH_ISLEAF( idx ) ((idx>>31)==1)
 #define BVH_GETNUM_TRIANGLES(idx) (idx&0x7FFFFFF)
 #define BVH_MAX_DEPTH 32
+#define BVH_DBG_INFO 0
+
+#define TRACER_MAX_HITS_PER_RAY 16
 
 
 namespace Reylax
 {
      struct DeviceBuffer;
 
+     __align__(4)
+     struct Ray
+     {
+         vec3 o, d;
+     };
 
+     __align__(4)
+     struct RayBox
+     {
+         u32 ray;
+         u32 node;
+     };
+
+     __align__(4)
+     struct RayFace
+     {
+         u32 ray;
+         u32 face;
+     };
+
+     __align__(8)
+     struct RayFaceHitCluster
+     {
+         RayFaceHitResult results[TRACER_MAX_HITS_PER_RAY];
+         u32 count;
+     };
+
+     __align__(4)
     struct FaceCluster
     {
         u32 faces[BVH_NUM_FACES_IN_LEAF];

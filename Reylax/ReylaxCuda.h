@@ -51,10 +51,10 @@ template <typename T> T atomicCAS2(T* lk, T old, T nw) { *lk = nw; return old; }
 
 namespace Reylax
 {
-    template <class T> FDEVICE T _min(T a, T b) { return a<b?a:b; }
-    template <class T> FDEVICE T _max(T a, T b) { return a>b?a:b; }
-    template <> FDEVICE vec3 _min(vec3 a, vec3 b) { return vec3(_min<float>(a.x, b.x), _min<float>(a.y, b.y), _min<float>(a.z, b.z)); }
-    template <> FDEVICE vec3 _max(vec3 a, vec3 b) { return vec3(_max<float>(a.x, b.x), _max<float>(a.y, b.y), _max<float>(a.z, b.z)); }
+    template <class T> FDEVICE INLINE T _min(T a, T b) { return a<b?a:b; }
+    template <class T> FDEVICE INLINE T _max(T a, T b) { return a>b?a:b; }
+    template <> FDEVICE INLINE vec3 _min(vec3 a, vec3 b) { return vec3(_min<float>(a.x, b.x), _min<float>(a.y, b.y), _min<float>(a.z, b.z)); }
+    template <> FDEVICE INLINE vec3 _max(vec3 a, vec3 b) { return vec3(_max<float>(a.x, b.x), _max<float>(a.y, b.y), _max<float>(a.z, b.z)); }
 
     FDEVICE INLINE u32 rgb(float r, float g, float b)
     {

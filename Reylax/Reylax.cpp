@@ -36,4 +36,41 @@ namespace Reylax
             }
         }
     }
+
+    void emulateCpu(u32 blockDim, const dim3& blocks, const dim3& threads, const std::function<void ()>& cb)
+    {
+    #if !RL_CUDA
+        bDim.x = blockDim;
+        for ( u32 b=0; b <blocks.x; b++ )
+        {
+            bIdx.x = b;
+            for ( u32 t=0; t<threads.x; t++ )
+            {
+                tIdx.x = t;
+                cb();
+            }
+        }
+    #endif
+    }
+
+
+    u32 hostOrDeviceCpy(void* dst, const void* src, u32 size, bool srcIsHostData)
+    {
+    #if !RL_CUDA
+        if ( 0 == memcpy( dst, src, size ) )
+            return ERROR_ALL_FINE;
+        return ERROR_INVALID_PARAMETER;
+    #else
+        if ( srcIsHostData )
+        {
+            RL_CUDA_CALL(cudaMemcpyAsync(dst, src, size, cudaMemcpyKind::cudaMemcpyHostToDevice));
+        }
+        else
+        {
+            RL_CUDA_CALL(cudaMemcpyAsync(dst, src, size, cudaMemcpyKind::cudaMemcpyDeviceToDevice));
+        }
+    #endif
+        return ERROR_ALL_FINE;
+    }
+
 }

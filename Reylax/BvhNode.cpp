@@ -48,11 +48,11 @@ namespace Reylax
         float bvhSize   = (float)sizeof(BvhNode)*numNodes/1024/1024;
         float faceSize  = (float)sizeof(Face)*allocatedFaceCount/1024/1024;
         float fclusSize = (float)sizeof(BvhNode)*numFacesClusters/1024/1024;
-        printf("Intermediate data allocation\n");
-        printf("BvhNodes: %d, size %.3fmb\n", numNodes, bvhSize);
-        printf("Faces: %d, size %.3fmb\n", allocatedFaceCount, faceSize);
-        printf("Fclusters: %d, size %.3fmb\n", numFacesClusters, fclusSize);
-        printf("Total: %.3fmb\n", (bvhSize+faceSize+fclusSize));
+        printf("BVH INTERMEDIATE data allocation\n");
+        printf("BVH BvhNodes: %d, size %.3fmb\n", numNodes, bvhSize);
+        printf("BVH Faces: %d, size %.3fmb\n", allocatedFaceCount, faceSize);
+        printf("BVH Fclusters: %d, size %.3fmb\n", numFacesClusters, fclusSize);
+        printf("BVH Total: %.3fmb\n", (bvhSize+faceSize+fclusSize));
     #endif
 
         BvhNode* nodes  = new BvhNode[numNodes];
@@ -109,11 +109,13 @@ namespace Reylax
             {
                 if ( (u32)st->faces.size() > BVH_NUM_FACES_IN_LEAF )
                 {
-                    printf("Could not fit all faces (%d) in a leaf node of BVH while max depth was reached.\n", (u32)st->faces.size());
+                    printf("BVH Could not fit all faces (%d) in a leaf node of BVH while max depth was reached.\n", (u32)st->faces.size());
                 }
                 else
                 {
+                #if BVH_DBG_INFO
                     printf("Fitted %d faces in leaf, depth %d\n", (u32)st->faces.size(), st->depth);
+                #endif
                 }
 
                 assert( faceClusterIndexer < numFacesClusters );
@@ -135,7 +137,9 @@ namespace Reylax
                 float biggest = node->hs.x;
                 if ( node->hs.y > biggest ) { splitAxis = 1; biggest = node->hs.y; }
                 if ( node->hs.z > biggest ) { splitAxis = 2; }
+            #if BVH_DBG_INFO
                printf("splitAxis %d\n", splitAxis);
+            #endif
 
                 vec3 dbox = bMax-bMin;
                 assert( dbox.x>0.f && dbox.y>0.f && dbox.z>0.f );
@@ -158,7 +162,7 @@ namespace Reylax
                     if ( rlTriBoxOverlap(&cpR.x, &hsR.x, v) == 1 ) facesR.push_back(f);
                 }
 
-            #if RL_PRINT_STATS
+            #if BVH_DBG_INFO
                 printf("Faces left: %zd | cpL %.3f %.3f %.3f | hsL %.3f %.3f %.3f\n", facesL.size(), cpL.x, cpL.y, cpL.z, hsL.x, hsL.y, hsL.z);
                 printf("Faces right: %zd | cpR %.3f %.3f %3f | hsR %.3f %.3f %.3f\n", facesR.size(), cpR.x, cpR.y, cpR.z, hsR.x, hsR.y, hsR.z);
             #endif
@@ -197,17 +201,23 @@ namespace Reylax
         float nodeSize = (float)sizeof(BvhNode)*nodeIndexer/1024/1024;
         float facesize = (float)sizeof(Face)*faceIndexer/1024/1024;
         float faceClusterSize = (float)sizeof(FaceCluster)*faceClusterIndexer/1024/1024;
-        printf("BVH NodeCount %d, size %fmb\n", nodeIndexer, nodeSize );
-        printf("BVH FaceCount %d, size %fmb\n", faceIndexer, facesize );
-        printf("BVH FaceClusterCount %d, size %fmb\n", faceClusterIndexer, faceClusterSize );
-        printf("BVH Total: %f\n", (nodeSize+facesize+faceClusterSize));
+        printf("BVH NodeCount %d, size %.3fmb\n", nodeIndexer, nodeSize );
+        printf("BVH FaceCount %d, size %.3fmb\n", faceIndexer, facesize );
+        printf("BVH FaceClusterCount %d, size %.3fmb\n", faceClusterIndexer, faceClusterSize );
+        printf("BVH Total: %.3fmb\n", (nodeSize+facesize+faceClusterSize));
         showDebugInfo( nodes );
     #endif
 
-        // get rid of temp data
+        // Ensure data is copied to device before deletion of host memory
+        syncDevice();
+
+        // get rid of intermediate data
         delete[] nodes;
         delete[] faces;
         delete[] fc;
+    #if RL_PRINT_STATS
+        printf("BVH freed INTERMEDIATE allocations.\n");
+    #endif
 
         return ERROR_ALL_FINE;
     }
@@ -255,15 +265,16 @@ namespace Reylax
         {
             stackNode* st = &stack[top--];
             const BvhNode* node = nodes + st->node;
-            avgDepth += st->depth;
             maxDepth = max(maxDepth, st->depth);
             numNodes++;
 
             if ( node->isLeaf() )
             {
                 numLeafs++;
+                numFaces += node->numFaces();
                 avgFacesPerLeaf += node->numFaces();
                 maxFacesInLeaf  = max<u64>(node->numFaces(), maxFacesInLeaf);
+                avgDepth += st->depth;
             }
             else
             {

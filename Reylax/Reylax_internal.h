@@ -19,4 +19,6 @@
 namespace Reylax
 {
     void forEachFace(const MeshData** md, u32 numMeshDatas, const std::function<void (u32, const u32[3], const vec3[3])>& cb);
+    void emulateCpu( u32 blockDimension, const dim3& blocks, const dim3& threads, const std::function<void ()>& cb );
+    u32  hostOrDeviceCpy( void* dst, const void* src, u32 size, bool srcIsHostData );
 }

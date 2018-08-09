@@ -58,6 +58,14 @@ struct Program
     float camPitch;
     vec3  camPos;
 
+    Program()
+    {
+        loopDone=false;
+        camPan=0;
+        camPitch=0;
+        camPos = vec3(0,0,-2);
+    }
+
     void update(Profiler& pr)
     {
         SDL_Event event;
@@ -148,7 +156,7 @@ struct Program
             mat4 yaw   = rotate(camPan, vec3(0.f, 1.f, 0.f));
             mat4 pitch = rotate(camPitch, vec3(1.f, 0.f, 0.f));
             mat3 orient = ( yaw * pitch );
-  //          err = m_camera->traceScene(&m_pos.x, &orient[0][0], m_scene);
+            err = tracer->trace( (const float*)&camPos, (const float*)&orient, scene, query, &result, 1 );
             assert(err==0);
         } 
       //  cudaDeviceSynchronize();

@@ -61,7 +61,7 @@ namespace Reylax
     struct ITracer
     {
         RL_DLL static ITracer* create();
-        virtual u32 trace( const IGpuStaticScene* scene, const ITraceQuery* query, const ITraceResult** results, u32 numResults ) = 0;
+        virtual u32 trace( const float* eye3, const float* orient3x3, const IGpuStaticScene* scene, const ITraceQuery* query, const ITraceResult* const* results, u32 numResults ) = 0;
     };
 
 

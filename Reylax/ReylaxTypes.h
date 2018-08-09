@@ -1,6 +1,6 @@
 #pragma once
 
-#define RL_CUDA 1
+#define RL_CUDA 0
 
 namespace Reylax
 {
@@ -22,33 +22,37 @@ namespace Reylax
     constexpr u32 VERTEX_DATA_COUNT         = 10; // This is not a slot
 
 
+    __declspec(align(4))
     struct Material
     {
         u32 texture;
     };
 
+    __declspec(align(8))
     struct Face
     {
-        u32 x, y, z, w;
         Material* mat;
+        u32 x, y, z, w;
     };
 
+    __declspec(align(8))
     struct MeshData
     {
         float* vertexData[VERTEX_DATA_COUNT];
-        u32    vertexDataSizes[VERTEX_DATA_COUNT];
         u32*   indices;
+        Material* material;
+        u32    vertexDataSizes[VERTEX_DATA_COUNT];
         u32    numVertices;
         u32    numIndices;
-        Material* material;
     };
 
+    __declspec(align(8))
     struct RayFaceHitResult
     {
+        Face* face;
         float dist, u, v;
         float ro[3];
         float rd[3];
-        Face* face;
     };
 
     using HitCallback = void (*)(const RayFaceHitResult*, const MeshData*, void**);
