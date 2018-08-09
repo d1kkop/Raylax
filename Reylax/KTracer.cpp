@@ -5,17 +5,42 @@
 #define NUM_RAYBOX_QUEUES 32
 #define NUM_LEAF_QUEUES 32
 
-#define RAY_BOX_THREADS 256
+#define BLOCK_THREADS 256
 
 
 namespace Reylax
 {
+    GLOBAL void ResetRayBoxKernel(Store<RayBox>* rayBoxQueue)
+    {
+        rayBoxQueue->m_top = 0;
+    }
+
+    GLOBAL void ResetRayLeafKernel(Store<RayBox>* leafQueue)
+    {
+        leafQueue->m_top = 0;
+    }
+
+    GLOBAL void ResetRayFaceKernel(Store<RayFace>* rayFaceQueue)
+    {
+        rayFaceQueue->m_top = 0;
+        ResetRayLeafKernel<<<1, 1>>>( nullptr );
+    }
+
+    GLOBAL void SetInitialRbQueriesKernel(u32 numRays, Store<RayBox>* rayBoxQueue)
+    {
+        u32 i = bIdx.x * bDim.x + tIdx.x;
+        if ( i >= numRays ) return;
+        RayBox* rb = rayBoxQueue->getNew(1);
+        rb->node = 0;
+        rb->ray  = i;
+    }
+
     GLOBAL void RayBoxKernel(vec3 eye,
                              mat3 orient,
                              u32 numRayBoxes,
                              Store<RayBox>* rayBoxQueueIn,
                              Store<RayBox>* rayBoxQueueOut,
-                             Store<u32>* leafQueue,
+                             Store<RayBox>* leafQueue,
                              const vec3* rayDirs,
                              const BvhNode* bvhNodes)
     {
@@ -34,8 +59,8 @@ namespace Reylax
         {
             if ( node->isLeaf() )
             {
-                u32* leafTestIdx = leafQueue->getNew(1);
-                *leafTestIdx = i;
+                RayBox* rbLeaf = leafQueue->getNew(1);
+                *rbLeaf = *rb;
             }
             else
             {
@@ -54,7 +79,7 @@ namespace Reylax
     GLOBAL void RayBoxQueueStichKernel(u32 numInnerQueues,
                                        Store<RayBox>* rayBoxQueueIn,
                                        Store<RayBox>* rayBoxQueueOut,
-                                       Store<u32>* leafQueue,
+                                       Store<RayBox>* leafQueue,
                                        Ray* rayBuffer,
                                        const BvhNode* bvhNodes)
     {
@@ -63,16 +88,14 @@ namespace Reylax
     }
 
     GLOBAL void LeafExpandKernel(u32 numLeafs,
-                                 Store<RayBox>* rayBoxQueue,
-                                 Store<u32>* leafQueue,
+                                 Store<RayBox>* leafQueue,
                                  Store<RayFace>* rayFaceQueue,
                                  const BvhNode* bvhNodes,
-                                 FaceCluster* faceClusters)
+                                 const FaceCluster* faceClusters)
     {
         u32 i = bIdx.x * bDim.x + tIdx.x;
         if ( i >= numLeafs ) return;
-        u32 rayBoxIdx = *leafQueue->get(i);
-        RayBox* rb    = rayBoxQueue->get(rayBoxIdx);
+        RayBox* rb = leafQueue->get(i);
         const BvhNode* node = bvhNodes + rb->node;
         assert(node->isLeaf());
         u32 numFaces = node->numFaces();
@@ -153,7 +176,6 @@ namespace Reylax
             finResult->face = nullptr;
         }
     }
-
 }
 
 
@@ -162,12 +184,62 @@ extern "C"
 {
     using namespace Reylax;
 
+
+    u32 rlResetRayBoxQueue(Store<RayBox>* queue)
+    {
+        if (!queue) return ERROR_INVALID_PARAMETER;
+    #if RL_CUDA
+        ResetRayBoxKernel<<<1, 1>>>(queue);
+    #else
+        ResetRayBoxKernel(queue);
+    #endif
+        return ERROR_ALL_FINE;
+    }
+
+    u32 rlResetRayLeafQueue(Store<RayBox>* queue)
+    {
+        if (!queue) return ERROR_INVALID_PARAMETER;
+    #if RL_CUDA
+        ResetRayLeafKernel<<<1, 1>>>(queue);
+    #else
+        ResetRayLeafKernel(queue);
+    #endif
+        return ERROR_ALL_FINE;
+    }
+
+    u32 rlResetRayFaceQueue(Store<RayFace>* queue)
+    {
+        if ( !queue ) return ERROR_INVALID_PARAMETER;
+    #if RL_CUDA
+        ResetRayFaceKernel<<<1, 1>>>(queue);
+    #else
+        ResetRayFaceKernel(queue);
+    #endif
+        return ERROR_ALL_FINE;
+    }
+
+    u32 rlSetInitialRbQueries(u32 numRays, Store<RayBox>* queue)
+    {
+        if ( numRays==0 || !queue ) return ERROR_INVALID_PARAMETER;
+        dim3 blocks  ((numRays + BLOCK_THREADS-1)/BLOCK_THREADS);
+        dim3 threads (BLOCK_THREADS);
+    #if RL_CUDA
+        SetInitialRbQueriesKernel<<<blocks, threads>>>( numRays, queue );
+    #else
+        emulateCpu(BLOCK_THREADS, blocks, threads, [=]()
+        {
+            SetInitialRbQueriesKernel(numRays, queue);
+        });
+    #endif
+        return ERROR_ALL_FINE;
+    }
+
     u32 rlRayBox(const float* eye3,
                  const float* orient3x3,
                  u32 numRayBoxes,
                  Store<RayBox>* rayBoxQueueIn,
                  Store<RayBox>* rayBoxQueueOut,
-                 Store<u32>* leafQueue,
+                 Store<RayBox>* leafQueue,
                  const vec3* rayDirs,
                  const BvhNode* bvhNodes)
     {
@@ -175,17 +247,40 @@ extern "C"
         {
             return ERROR_INVALID_PARAMETER;
         }
-
-        dim3 blocks  ((numRayBoxes + RAY_BOX_THREADS-1)/RAY_BOX_THREADS);
-        dim3 threads (RAY_BOX_THREADS);
         vec3 eye = *(vec3*)eye3;
         mat3 orient = *(mat3*)orient3x3;
+        dim3 blocks  ((numRayBoxes + BLOCK_THREADS-1)/BLOCK_THREADS);
+        dim3 threads (BLOCK_THREADS);
     #if RL_CUDA
         RayBoxKernel<<< blocks, threads >>>( eye, orient, numRayBoxes, rayBoxQueueIn, rayBoxQueueOut, leafQueue, rayDirs, bvhNodes );
     #else
-        emulateCpu(RAY_BOX_THREADS, blocks, threads, [=]()
+        emulateCpu(BLOCK_THREADS, blocks, threads, [=]()
         { 
             RayBoxKernel( eye, orient, numRayBoxes, rayBoxQueueIn, rayBoxQueueOut, leafQueue, rayDirs, bvhNodes );
+        });
+    #endif
+
+        return ERROR_ALL_FINE;
+    }
+
+    u32 rlExpandLeafs(u32 numRayLeafQueries,
+                      Store<RayBox>* leafQueue,
+                      Store<RayFace>* rayFaceQueue,
+                      const BvhNode* bvhNodes,
+                      const FaceCluster* faceClusters)
+    {
+        if ( numRayLeafQueries==0 || !leafQueue || !rayFaceQueue || !bvhNodes || !faceClusters )
+        {
+            return ERROR_INVALID_PARAMETER;
+        }
+        dim3 blocks  ((numRayLeafQueries + BLOCK_THREADS-1)/BLOCK_THREADS);
+        dim3 threads (BLOCK_THREADS);
+    #if RL_CUDA
+        LeafExpandKernel<<< blocks, threads >>>(numRayLeafQueries, leafQueue, rayFaceQueue, bvhNodes, faceClusters );
+    #else
+        emulateCpu(BLOCK_THREADS, blocks, threads, [=]()
+        {
+            LeafExpandKernel( numRayLeafQueries, leafQueue, rayFaceQueue, bvhNodes, faceClusters );
         });
     #endif
 

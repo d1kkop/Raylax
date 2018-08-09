@@ -45,14 +45,15 @@ namespace Reylax
         u32 numFacesClusters = _max<u32>((u32)sqrt(numNodes), allocatedFaceCount/(BVH_NUM_FACES_IN_LEAF/8));
 
     #if RL_PRINT_STATS
+        printf("--- BVH Static scene allocations ---\n\n");
         float bvhSize   = (float)sizeof(BvhNode)*numNodes/1024/1024;
         float faceSize  = (float)sizeof(Face)*allocatedFaceCount/1024/1024;
         float fclusSize = (float)sizeof(BvhNode)*numFacesClusters/1024/1024;
-        printf("BVH INTERMEDIATE data allocation\n");
-        printf("BVH BvhNodes: %d, size %.3fmb\n", numNodes, bvhSize);
-        printf("BVH Faces: %d, size %.3fmb\n", allocatedFaceCount, faceSize);
-        printf("BVH Fclusters: %d, size %.3fmb\n", numFacesClusters, fclusSize);
-        printf("BVH Total: %.3fmb\n", (bvhSize+faceSize+fclusSize));
+        printf("Intermediate data\n");
+        printf("BvhNodes: %d, size %.3fmb\n", numNodes, bvhSize);
+        printf("Faces: %d, size %.3fmb\n", allocatedFaceCount, faceSize);
+        printf("Fclusters: %d, size %.3fmb\n", numFacesClusters, fclusSize);
+        printf("Total: %.3fmb\n", (bvhSize+faceSize+fclusSize));
     #endif
 
         BvhNode* nodes  = new BvhNode[numNodes];
@@ -109,7 +110,7 @@ namespace Reylax
             {
                 if ( (u32)st->faces.size() > BVH_NUM_FACES_IN_LEAF )
                 {
-                    printf("BVH Could not fit all faces (%d) in a leaf node of BVH while max depth was reached.\n", (u32)st->faces.size());
+                    printf("Could not fit all faces (%d) in a leaf node of BVH while max depth was reached.\n", (u32)st->faces.size());
                 }
                 else
                 {
@@ -201,10 +202,11 @@ namespace Reylax
         float nodeSize = (float)sizeof(BvhNode)*nodeIndexer/1024/1024;
         float facesize = (float)sizeof(Face)*faceIndexer/1024/1024;
         float faceClusterSize = (float)sizeof(FaceCluster)*faceClusterIndexer/1024/1024;
-        printf("BVH NodeCount %d, size %.3fmb\n", nodeIndexer, nodeSize );
-        printf("BVH FaceCount %d, size %.3fmb\n", faceIndexer, facesize );
-        printf("BVH FaceClusterCount %d, size %.3fmb\n", faceClusterIndexer, faceClusterSize );
-        printf("BVH Total: %.3fmb\n", (nodeSize+facesize+faceClusterSize));
+        printf("\nActual allocations on device\n");
+        printf("NodeCount %d, size %.3fmb\n", nodeIndexer, nodeSize);
+        printf("FaceCount %d, size %.3fmb\n", faceIndexer, facesize);
+        printf("FaceClusterCount %d, size %.3fmb\n", faceClusterIndexer, faceClusterSize);
+        printf("Total: %.3fmb\n", (nodeSize+facesize+faceClusterSize));
         showDebugInfo( nodes );
     #endif
 
@@ -215,8 +217,10 @@ namespace Reylax
         delete[] nodes;
         delete[] faces;
         delete[] fc;
+
     #if RL_PRINT_STATS
-        printf("BVH freed INTERMEDIATE allocations.\n");
+        printf("\nDELETED intermediate allocations\n\n");
+        printf("--- End BVH static scene creation ---\n\n");
     #endif
 
         return ERROR_ALL_FINE;

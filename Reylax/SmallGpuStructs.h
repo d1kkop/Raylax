@@ -1,5 +1,6 @@
 #pragma once
 #include "Reylax.h"
+#include "ReylaxCommon.h"
 
 namespace Reylax
 {
@@ -19,7 +20,7 @@ namespace Reylax
     {
         TraceQuery(const float* rays3, u32 numRays);
         virtual ~TraceQuery();
-
+        u32 m_numRays;
         DeviceBuffer* m_oris;
         DeviceBuffer* m_dirs;
     };
@@ -28,22 +29,7 @@ namespace Reylax
     {
         TraceResult(u32 numRays);
         virtual ~TraceResult();
+        u32 m_numRays;
         DeviceBuffer* m_result;
-    };
-
-    struct Tracer: public ITracer
-    {
-        Tracer(u32 numRayBoxQueries=256*256*256, u32 numLeafQueries=256*256*256);
-        virtual ~Tracer();
-        void resetRayBoxQueue( u32 idx );
-        void resetRayLeafQueue();
-        u32 trace( const float* eye3, const float* orient3x3, const IGpuStaticScene* scene, const ITraceQuery* query, const ITraceResult* const* results, u32 numResults ) override;
-
-        DeviceBuffer* m_rayBoxQueue[2];
-        DeviceBuffer* m_leafQueue;
-        DeviceBuffer* m_rayBoxBuffer[2];
-        DeviceBuffer* m_leafBuffer;
-        u32 m_numRayBoxQueries;
-        u32 m_numRayLeafQueries;
     };
 }

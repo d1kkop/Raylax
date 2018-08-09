@@ -81,10 +81,10 @@ namespace Reylax
             return BVH_GETNUM_TRIANGLES(left);
         }
 
-        FDEVICE u32 getFace(FaceCluster* faceClusters, u32 idx) const
+        FDEVICE u32 getFace(const FaceCluster* faceClusters, u32 idx) const
         {
             assert(isLeaf());
-            FaceCluster* fc = faceClusters + right;
+            const FaceCluster* fc = faceClusters + right;
             return fc->getFace(idx);
         }
 

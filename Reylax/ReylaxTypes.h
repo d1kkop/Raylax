@@ -1,6 +1,6 @@
 #pragma once
 
-#define RL_CUDA 0
+#define RL_CUDA 1
 
 namespace Reylax
 {

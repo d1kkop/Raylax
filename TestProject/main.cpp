@@ -162,8 +162,6 @@ struct Program
       //  cudaDeviceSynchronize();
         pr.stop("Trace");
 
-
-
         // Draw fulls creen quad and copy buffer to gl render target.
         pr.start();
         //glRenderer.sync();

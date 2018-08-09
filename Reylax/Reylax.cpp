@@ -1,5 +1,8 @@
 #include "Reylax.h"
 #include "Reylax_internal.h"
+#include <chrono>
+using namespace std;
+using namespace chrono;
 
 // For now only CUDA implementation. 
 // Perhaps OpenCL, later too.
@@ -21,6 +24,11 @@ namespace Reylax
     void syncDevice()
     {
         RL_CUDA_CALL(cudaDeviceSynchronize());
+    }
+
+    double time()
+    {
+        return static_cast<double>(duration_cast<duration<double, milli>>(high_resolution_clock::now().time_since_epoch()).count());
     }
     
     void forEachFace(const MeshData** md, u32 numMeshDatas, const std::function<void (u32, const u32[3], const vec3[3])>& cb)
@@ -54,23 +62,23 @@ namespace Reylax
     }
 
 
-    u32 hostOrDeviceCpy(void* dst, const void* src, u32 size, bool srcIsHostData)
+    u32 hostOrDeviceCpy(void* dst, const void* src, u32 size, cudaMemcpyKind kind, bool async)
     {
     #if !RL_CUDA
-        if ( 0 == memcpy( dst, src, size ) )
+        if ( dst == memcpy( dst, src, size ) )
             return ERROR_ALL_FINE;
         return ERROR_INVALID_PARAMETER;
     #else
-        if ( srcIsHostData )
+        if ( async )
         {
-            RL_CUDA_CALL(cudaMemcpyAsync(dst, src, size, cudaMemcpyKind::cudaMemcpyHostToDevice));
+            RL_CUDA_CALL(cudaMemcpyAsync(dst, src, size, kind));
         }
         else
         {
-            RL_CUDA_CALL(cudaMemcpyAsync(dst, src, size, cudaMemcpyKind::cudaMemcpyDeviceToDevice));
+            RL_CUDA_CALL(cudaMemcpy(dst, src, size, kind));
         }
-    #endif
         return ERROR_ALL_FINE;
+    #endif
     }
 
 }
