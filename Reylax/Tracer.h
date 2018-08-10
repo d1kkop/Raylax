@@ -10,7 +10,6 @@ namespace Reylax
     {
         Tracer(u32 numRayBoxQueries=256*256*64*4, u32 numLeafQueries=256*256*64*8, u32 numRayFaceQueries=256*256*64*16, u32 numRaysPerTile=256*256);
         virtual ~Tracer();
-        u32 getQueueTop(const char* queue, bool wait);
         u32 trace(const float* eye3, const float* orient3x3, const IGpuStaticScene* scene, const ITraceQuery* query, const ITraceResult* const* results, u32 numResults) override;
 
         void doRayBoxQueries(Store<RayBox>** rbQueue, Store<RayBox>* leafQueue, const float* eye3, const float* orient3x3, const vec3* rayDirs, const BvhNode* bvhNodes);

@@ -26,7 +26,7 @@ namespace Reylax
     {
         // Create render target rom OpenGL Texture Buffer Object.
         RL_DLL static IRenderTarget* createFromGLTBO(u32 rtId, u32 width, u32 height);
-
+        virtual ~IRenderTarget() = default;
         virtual void* buffer() const = 0;
         virtual u32 width() const  = 0;
         virtual u32 height() const = 0;
@@ -39,6 +39,7 @@ namespace Reylax
     struct IMesh
     {
         RL_DLL static IMesh* create();
+        virtual ~IMesh() = default;
         virtual u32 setVertexData(const float* vertices, u32 numVertices, u32 numComponents, u32 slotId) = 0;
         virtual u32 setIndices(const u32* indices, u32 numIndices) = 0;
     };
@@ -46,21 +47,25 @@ namespace Reylax
     struct IGpuStaticScene
     {
         RL_DLL static IGpuStaticScene* create(IMesh* const * meshes, u32 numMeshes);
+        virtual ~IGpuStaticScene() = default;
     };
 
     struct ITraceQuery
     {
         RL_DLL static ITraceQuery* create(const float* rays3, u32 numRays);
+        virtual ~ITraceQuery() = default;
     };
 
     struct ITraceResult
     {
         RL_DLL static ITraceResult* create(u32 numRays);
+        virtual ~ITraceResult() = default;
     };
 
     struct ITracer
     {
         RL_DLL static ITracer* create();
+        virtual ~ITracer() = default;
         virtual u32 trace( const float* eye3, const float* orient3x3, const IGpuStaticScene* scene, const ITraceQuery* query, const ITraceResult* const* results, u32 numResults ) = 0;
     };
 

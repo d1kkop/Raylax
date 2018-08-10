@@ -8,6 +8,8 @@
 #include "ReylaxTypes.h"
 using namespace glm;
 
+#define RL_CUDA 1
+#define RL_PRINT_STATS 1
 
 #if RL_CUDA 
 

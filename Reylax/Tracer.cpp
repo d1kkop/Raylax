@@ -7,23 +7,11 @@ using namespace std;
 extern "C"
 {
     using namespace Reylax;
-    u32 rlResetRayBoxQueue(Store<RayBox>* queue);
-    u32 rlResetRayLeafQueue(Store<RayBox>* queue);
-    u32 rlResetRayFaceQueue(Store<RayFace>* queue);
-    u32 rlSetInitialRbQueries(u32 numRays, Store<RayBox>* queue);
-    u32 rlRayBox(const float* eye3, 
-                 const float* orient3x3, 
-                 u32 numRayBoxes,
-                 Store<RayBox>* rayBoxQueueIn, 
-                 Store<RayBox>* rayBoxQueueOut, 
-                 Store<RayBox>* leafQueue,
-                 const vec3* rayDirs,
-                 const BvhNode* bvhNodes);
-    u32 rlExpandLeafs(u32 numRayLeafQueries,
-                      Store<RayBox>* leafQueue,
-                      Store<RayFace>* rayFaceQueue,
-                      const BvhNode* bvhNodes,
-                      const FaceCluster* faceClusters);
+    u32 rlDoTrace(u32 numRays, const vec3& eye, const mat3& orient,
+                  Store<RayBox>** rbQueues, Store<RayBox>* leafQueue, Store<RayFace>* rayFaceQueue,
+                  const vec3* rayOris, const vec3* rayDirs, 
+                  const BvhNode* bvhNodes, const Face* faces, const FaceCluster* faceClusters,
+                  RayFaceHitCluster* hitResultClusters, const MeshData* meshData);
 }
 
 
@@ -54,7 +42,7 @@ namespace Reylax
         m_rayFaceBuffer = new DeviceBuffer(numRayFaceQueries*sizeof(RayFace));
 
     #if RL_PRINT_STATS
-        printf("--- Tracer allocations ---\n\n");
+        printf("\n--- Tracer allocations ---\n\n");
         printf("RayLeafQueries count %d, size %.3fmb\n", numLeafQueries, (float)m_leafBuffer->size()/1024/1024);
         printf("RayFaceQueries count %d, size %.3fmb\n", numRayFaceQueries, (float)m_rayFaceBuffer->size()/1024/1024);
     #endif
@@ -101,14 +89,6 @@ namespace Reylax
         delete m_rayBoxBuffer[1];
     }
 
-    u32 Tracer::getQueueTop(const char* queue, bool wait)
-    {
-        u32 top=0;
-        u32 err = hostOrDeviceCpy(&top, queue + offsetof(Store<RayBox>, m_top), sizeof(u32), cudaMemcpyDeviceToHost, !wait);
-        assert(err==0);
-        return top;
-    }
-
     u32 Tracer::trace(const float* eye3, const float* orient3x3, const IGpuStaticScene* scene, const ITraceQuery* query, const ITraceResult* const* results, u32 numResults)
     {
         if ( !scene || !query || numResults==0 || results==nullptr )
@@ -122,6 +102,8 @@ namespace Reylax
         auto trq = static_cast<const TraceQuery*>(query);
         auto scn = static_cast<const GpuStaticScene*>(scene);
 
+        vec3 eye                        = *(vec3*)eye3;
+        mat3 orient                     = *(mat3*)orient3x3;
         Store<RayBox>* rbQueue[]        = { m_rayBoxQueue[0]->ptr<Store<RayBox>>(), m_rayBoxQueue[1]->ptr<Store<RayBox>>() };
         Store<RayBox>* leafQueue        = m_leafQueue->ptr<Store<RayBox>>();
         Store<RayFace>* rayFaceQueue    = m_rayFaceQueue->ptr<Store<RayFace>>();
@@ -134,88 +116,22 @@ namespace Reylax
         m_profiler.beginProfile();
 
         // while rays to process, process per batch/tile to conserve memory usage
+        u32 kTile=0;
         while ( totalRays > 0 )
         {
             u32 numRaysThisTile = _min(m_numRaysPerTile, totalRays);
 
-        //#if RL_PRINT_STATS
-        //    printf("--- Trace Tile begin ---\n\n");
-        //#endif
-
-            // prepare tile
-            rlResetRayBoxQueue(rbQueue[0]);
-            rlResetRayLeafQueue(leafQueue);
-            rlResetRayFaceQueue(rayFaceQueue);
-            rlSetInitialRbQueries(numRaysThisTile, rbQueue[0]);
-
-            // execute ray/box queries
             m_profiler.start();
-            doRayBoxQueries(rbQueue, leafQueue, eye3, orient3x3, rayDirs, bvhNodes);
-            m_profiler.stop("Rb queries");
+            rlDoTrace( numRaysThisTile, eye, orient, 
+                       rbQueue, leafQueue, rayFaceQueue, rayDirs, bvhNodes, faces, faceClusters );
+            m_profiler.stop("Tile " + to_string(kTile++));
 
-            // execute ray/leaf queries
-            m_profiler.start();
-            doExpandLeafs(leafQueue, rayFaceQueue, bvhNodes, faceClusters);
-            m_profiler.stop("Lf queries");
-
-            // execute ray/face queries
-            u32 rfTop = getQueueTop( (const char*)rayFaceQueue, true );
-
-            // go next tile
-            totalRays -= numRaysThisTile; 
-
-        //#if RL_PRINT_STATS
-        //    printf("\n--- Trace Tile end ---\n\n");
-        //#endif
+            totalRays -= numRaysThisTile;
         }
 
         m_profiler.endProfile("Trace");
 
         return ERROR_ALL_FINE;
-    }
-
-    void Tracer::doRayBoxQueries(Store<RayBox>** rbQueue, Store<RayBox>* leafQueue, const float* eye3, const float* orient3x3, const vec3* rayDirs, const BvhNode* bvhNodes)
-    {
-        for ( u32 i=0; /*no stop cond*/; ++i )
-        {
-            u32 inQueue  = i%2;
-            u32 outQueue = (i+1)%2;
-
-            // stop if all rb queries are done
-            u32 topIn = getQueueTop((const char*)rbQueue[inQueue], true);
-            if ( topIn==0 )
-            {
-                break;
-            }
-
-            // ensure top out is set to zero
-            rlResetRayBoxQueue(rbQueue[outQueue]);
-
-        #if !RL_CUDA && DBG_RB_QUERIES
-            printf("--- RB iteration %d ---\n", i);
-            printf("Num RB In/Out Before %d/%d\n", rbQueue[inQueue]->m_top, rbQueue[outQueue]->m_top);
-            printf("Num LeafQ %d Before\n", leafQueue->m_top);
-        #endif
-
-            // execute all rb queries from queue-in and generate new to queue-out or leaf-queue
-            u32 err = rlRayBox(eye3, orient3x3, topIn, rbQueue[inQueue], rbQueue[outQueue], leafQueue, rayDirs, bvhNodes);
-            assert(err==0);
-
-        #if !RL_CUDA && DBG_RB_QUERIES
-            printf("Num RB In/Out After %d/%d\n", rbQueue[inQueue]->m_top, rbQueue[outQueue]->m_top);
-            printf("Num LeafQ %d After\n", leafQueue->m_top);
-        #endif
-        }
-    }
-
-    void Tracer::doExpandLeafs(Store<RayBox>* leafQueue, Store<RayFace>* rayFaceQueue, const BvhNode* bvhNodes, const FaceCluster* faceClusters)
-    {
-    #if !RL_CUDA && DBG_RL_QUERIES
-        printf("Num in LeafQ %d\n", leafQueue->m_top);
-    #endif
-        u32 numLeafQueries = getQueueTop((const char*)leafQueue, true);
-        u32 err = rlExpandLeafs(numLeafQueries, leafQueue, rayFaceQueue, bvhNodes, faceClusters);
-        assert(err==0);
     }
 
 }

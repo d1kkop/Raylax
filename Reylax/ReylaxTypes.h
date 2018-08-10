@@ -1,7 +1,5 @@
 #pragma once
 
-#define RL_CUDA 1
-
 namespace Reylax
 {
     using i32 = __int32;

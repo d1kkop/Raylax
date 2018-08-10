@@ -132,11 +132,6 @@ struct Program
         u32 err=0;
 
         pr.start();
-        err = rt->unlock();
-        assert(err==0);
-        pr.stop("Unlock");
-
-        pr.start();
         err = rt->lock();
         assert(err==0);
         pr.stop("Lock");
@@ -144,22 +139,27 @@ struct Program
         pr.start();
         for ( int i = 0; i<1; i++ )
         {
-            err = rt->clear((i*3) | (50<<16));
+            err = rt->clear(255);
             assert(err==0);
         }
         syncDevice();
         pr.stop("Clear");
+
+        pr.start();
+        err = rt->unlock();
+        assert(err==0);
+        pr.stop("Unlock");
 
         // Primary rays
         pr.start();
         {
             mat4 yaw   = rotate(camPan, vec3(0.f, 1.f, 0.f));
             mat4 pitch = rotate(camPitch, vec3(1.f, 0.f, 0.f));
-            mat3 orient = ( yaw * pitch );
-            err = tracer->trace( (const float*)&camPos, (const float*)&orient, scene, query, &result, 1 );
+            mat3 orient = (yaw * pitch);
+            err = tracer->trace((const float*)&camPos, (const float*)&orient, scene, query, &result, 1);
             assert(err==0);
-        } 
-      //  cudaDeviceSynchronize();
+        }
+        syncDevice();
         pr.stop("Trace");
 
         // Draw fulls creen quad and copy buffer to gl render target.
@@ -216,16 +216,16 @@ int main(int argc, char** argv)
     sdl_glContext = SDL_GL_CreateContext(sdl_window);
     SDL_CALL(SDL_GL_MakeCurrent(sdl_window, sdl_glContext));
 
-    // GL interop with Cuda. We want our filled framebuffer to be shaded to the backbuffer without copy to host memory.
+    // GL interop with Cuda. We want our filled framebuffer to be blitted to the backbuffer without copy to host memory.
     GLTextureBufferObject* glRt=new GLTextureBufferObject();
     GLTextureBufferRenderer* glRenderer=new GLTextureBufferRenderer();
     if ( !glRt->init(width, height) ) return -1;
     if ( !glRenderer->init(width, height) ) return -1;
 
     IRenderTarget* rt;
-    IGpuStaticScene* scene;
-    ITraceQuery* query;
-    ITraceResult* result;
+    IGpuStaticScene* scene=nullptr;
+    ITraceQuery* query=nullptr;
+    ITraceResult* result=nullptr;
     ITracer* tracer;
     vector<IMesh*> meshes;
 
@@ -242,14 +242,14 @@ int main(int argc, char** argv)
     assert(scene);
     for (auto& m : meshes) delete m;
 
-    // All primary rays only have a direction, set this up.
+    // All primary rays only have a unique direction, set this up.
     vec3* rays = createPrimaryRays(width, height, -1, 1, 1, -1, 1);
-    query = ITraceQuery::create( (float*) rays, width*height );
+    query = ITraceQuery::create((float*)rays, width*height);
     assert(query);
-    delete [] rays;
+    delete[] rays;
 
     // Each trace has a trace result
-    result = ITraceResult::create( width*height );
+    result = ITraceResult::create(width*height);
     assert(result);
 
     // Create the actual tracer
@@ -258,8 +258,7 @@ int main(int argc, char** argv)
     // Update loop
     Program p;
     Profiler pr;
-    memset( &p, 0, sizeof(p) );
-    rt->lock();
+ //   rt->lock();
     double tBegin = time();
     u32 numFrames = 0;
     while ( !p.loopDone )

@@ -1,6 +1,7 @@
 #pragma once
-#include "ReylaxCuda.h"
+#include "Reylax_internal.h"
 #include <vector>
+
 
 #define RL_INVALID_INDEX ((u32)-1)
 #define RL_VALID_INDEX( idx ) (idx!=RL_INVALID_INDEX)
@@ -113,13 +114,13 @@ namespace Reylax
             return m_elements + old;
         }
 
-        FDEVICE T* get(u32 idx)
+        FDEVICE T* get(u32 idx) const
         {
             assert(idx < m_top);
             return m_elements + idx;
         }
 
-        FDEVICE bool validate(u32 newTop)
+        FDEVICE bool validate(u32 newTop) const
         {
             if ( newTop > m_max ) printf("m_top = %d, _max = %d\n", newTop, m_max);
             return newTop <= m_max;
@@ -159,7 +160,7 @@ namespace Reylax
                 (dot(v0v2, qvec)*invDet)));
     }
 
-    FDEVICE INLINE float FaceRayIntersect(Face* face, const vec3& eye, const vec3& dir, const MeshData* meshData, float& u, float& v)
+    FDEVICE INLINE float FaceRayIntersect(const Face* face, const vec3& eye, const vec3& dir, const MeshData* meshData, float& u, float& v)
     {
         assert(meshData);
         const MeshData* mesh = &meshData[face->w];

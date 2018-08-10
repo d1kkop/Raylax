@@ -54,9 +54,6 @@
     <ClCompile Include="Reylax.cpp">
       <Filter>Core</Filter>
     </ClCompile>
-    <ClCompile Include="Benchmark.cpp">
-      <Filter>Kernels</Filter>
-    </ClCompile>
     <ClCompile Include="BvhNode.cpp">
       <Filter>Core</Filter>
     </ClCompile>

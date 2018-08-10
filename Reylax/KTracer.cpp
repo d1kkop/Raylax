@@ -2,29 +2,19 @@
 #include "Reylax.h"
 #include "Reylax_internal.h"
 
+#define BLOCK_THREADS 256
 #define NUM_RAYBOX_QUEUES 32
 #define NUM_LEAF_QUEUES 32
 
-#define BLOCK_THREADS 256
+#define DBG_RB_QUERIES 0
+#define DBG_RL_QUERIES 0
+#define DBG_RF_QUERIES 0
 
 
 namespace Reylax
 {
-    GLOBAL void ResetRayBoxKernel(Store<RayBox>* rayBoxQueue)
-    {
-        rayBoxQueue->m_top = 0;
-    }
-
-    GLOBAL void ResetRayLeafKernel(Store<RayBox>* leafQueue)
-    {
-        leafQueue->m_top = 0;
-    }
-
-    GLOBAL void ResetRayFaceKernel(Store<RayFace>* rayFaceQueue)
-    {
-        rayFaceQueue->m_top = 0;
-        ResetRayLeafKernel<<<1, 1>>>( nullptr );
-    }
+    DEVICE vec3 g_eye;
+    DEVICE mat3 g_orient;
 
     GLOBAL void SetInitialRbQueriesKernel(u32 numRays, Store<RayBox>* rayBoxQueue)
     {
@@ -35,9 +25,7 @@ namespace Reylax
         rb->ray  = i;
     }
 
-    GLOBAL void RayBoxKernel(vec3 eye,
-                             mat3 orient,
-                             u32 numRayBoxes,
+    GLOBAL void RayBoxKernel(u32 numRayBoxes,
                              Store<RayBox>* rayBoxQueueIn,
                              Store<RayBox>* rayBoxQueueOut,
                              Store<RayBox>* leafQueue,
@@ -48,14 +36,15 @@ namespace Reylax
         if ( i >= numRayBoxes ) return;
 
         RayBox* rb    = rayBoxQueueIn->get(i);
-        vec3 d        = orient * (rayDirs + rb->ray)[0];
+        vec3 d        = g_orient * (rayDirs + rb->ray)[0];
         const BvhNode* node = bvhNodes + rb->node;
 
+        vec3 o   = g_eye;
         vec3 cp  = node->cp;
         vec3 hs  = node->hs;
         vec3 invDir(1.f/d.x, 1.f/d.y, 1.f/d.z);
 
-        if ( BoxRayIntersect(cp-hs, cp+hs, eye, invDir) )
+        if ( BoxRayIntersect(cp-hs, cp+hs, o, invDir) )
         {
             if ( node->isLeaf() )
             {
@@ -74,17 +63,6 @@ namespace Reylax
                 (rbNew+1)->node = node->right;
             }
         }
-    }
-
-    GLOBAL void RayBoxQueueStichKernel(u32 numInnerQueues,
-                                       Store<RayBox>* rayBoxQueueIn,
-                                       Store<RayBox>* rayBoxQueueOut,
-                                       Store<RayBox>* leafQueue,
-                                       Ray* rayBuffer,
-                                       const BvhNode* bvhNodes)
-    {
-        u32 i = bIdx.x * bDim.x + tIdx.x;
-        if ( i >= numInnerQueues ) return;
     }
 
     GLOBAL void LeafExpandKernel(u32 numLeafs,
@@ -109,20 +87,20 @@ namespace Reylax
     }
 
     GLOBAL void FaceTestKernel(u32 numRayFaceQueries,
-                               Ray* rayBuffer,
-                               Store<RayFace>* rayFaceQueue,
-                               FaceCluster* faceClusters,
-                               Face* faceBuffer,
+                               const Store<RayFace>* rayFaceQueue,
+                               const FaceCluster* faceClusters,
+                               const vec3* rayOris,
+                               const vec3* rayDirs,
+                               const Face* faces,
                                RayFaceHitCluster* hitResultClusters,
-                               MeshData* meshData)
+                               const MeshData* meshData)
     {
         u32 i = bIdx.x * bDim.x + tIdx.x;
         if ( i >= numRayFaceQueries ) return;
         RayFace* rf = rayFaceQueue->get(i);
-        Ray* ray    = rayBuffer + rf->ray;
-        Face* face  = faceBuffer + rf->face;
-        vec3 d = ray->d;
-        vec3 o = ray->o;
+        const Face* face  = faces + rf->face;
+        vec3 d = rayDirs[rf->ray];
+        vec3 o = rayOris[rf->ray];
         float u, v;
         float dist = FaceRayIntersect(face, o, d, meshData, u, v);
         if ( dist != FLT_MAX )
@@ -176,114 +154,128 @@ namespace Reylax
             finResult->face = nullptr;
         }
     }
-}
 
+    GLOBAL void TileKernel(u32 numRays,
+                           vec3 eye,
+                           mat3 orient,
+                           Store<RayBox>** rbQueues,
+                           Store<RayBox>* leafQueue,
+                           Store<RayFace>* rayFaceQueue,
+                           const vec3* rayOris,
+                           const vec3* rayDirs,
+                           const BvhNode* bvhNodes,
+                           const Face* faces,
+                           const FaceCluster* faceClusters,
+                           RayFaceHitCluster* hitResultClusters,
+                           const MeshData* meshData)
+    {
+        g_eye    = eye;
+        g_orient = orient;
+
+        rbQueues[0]->m_top = 0;
+        leafQueue->m_top  = 0;
+        rayFaceQueue->m_top = 0;
+
+        // Set up initial Ray/box queries
+        dim3 blocks  ((numRays + BLOCK_THREADS-1)/BLOCK_THREADS);
+        dim3 threads (BLOCK_THREADS);
+        RL_KERNEL_CALL(BLOCK_THREADS, blocks, threads, SetInitialRbQueriesKernel, numRays, rbQueues[0]);
+
+        // Iterate Ray/box queries until queues are empty
+        {
+        #if DBG_RB_QUERIES
+            printf("\n--- Ray/box queries ---\n\n");
+        #endif
+
+            for ( u32 i=0; /*no stop cond*/; ++i )
+            {
+                u32 inQueue  = i%2;
+                u32 outQueue = (i+1)%2;
+
+                // stop if all rb queries are done
+                if ( rbQueues[inQueue]->m_top==0 )
+                {
+                    break;
+                }
+
+                // ensure top out is set to zero
+                rbQueues[outQueue]->m_top = 0;
+
+            #if DBG_RB_QUERIES
+                printf("--- RB iteration %d ---\n", i);
+                printf("Num RB In/Out Before %d/%d\n", rbQueues[inQueue]->m_top, rbQueues[outQueue]->m_top);
+                printf("Num LeafQ %d Before\n", leafQueue->m_top);
+            #endif
+
+                // execute all rb queries from queue-in and generate new to queue-out or leaf-queue
+                u32 numRayBoxes = rbQueues[inQueue]->m_top;
+                blocks = dim3((numRayBoxes + BLOCK_THREADS-1)/BLOCK_THREADS);
+                RL_KERNEL_CALL(BLOCK_THREADS, blocks, threads, RayBoxKernel, numRayBoxes, rbQueues[inQueue], rbQueues[outQueue], leafQueue, rayDirs, bvhNodes);
+                cudaDeviceSynchronize();
+
+            #if DBG_RB_QUERIES
+                printf("Num RB In/Out After %d/%d\n", rbQueues[inQueue]->m_top, rbQueues[outQueue]->m_top);
+                printf("Num LeafQ %d After\n", leafQueue->m_top);
+            #endif
+            }
+
+        #if DBG_RB_QUERIES
+            printf("\n--- End Ray/box queries ---\n");
+        #endif
+        }
+
+        // Leaf queries
+        {
+            u32 numLeafQueries = leafQueue->m_top;
+        #if DBG_RL_QUERIES
+            printf("\n--- Begin Leaf queries %d ---", numLeafQueries);
+        #endif
+
+            blocks = dim3((numLeafQueries + BLOCK_THREADS-1)/BLOCK_THREADS);
+            RL_KERNEL_CALL(BLOCK_THREADS, blocks, threads, LeafExpandKernel, numLeafQueries, leafQueue, rayFaceQueue, bvhNodes, faceClusters);
+            cudaDeviceSynchronize();
+
+        #if DBG_RL_QUERIES
+            printf("--- End Leaf queries %d ---\n", numLeafQueries);
+        #endif
+        }
+
+        // Ray/face queries
+        {
+            u32 numRayFace = rayFaceQueue->m_top;
+        #if DBG_RL_QUERIES
+            printf("\n--- Begin Ray/face queries %d ---", numRayFace);
+        #endif
+
+            blocks = dim3((numRayFace + BLOCK_THREADS-1)/BLOCK_THREADS);
+            RL_KERNEL_CALL(BLOCK_THREADS, blocks, threads, FaceTestKernel, numRayFace, rayFaceQueue, faceClusters, rayOris, rayDirs, faces, hitResultClusters, meshData);
+            cudaDeviceSynchronize();
+
+        #if DBG_RL_QUERIES
+            printf("--- End Ray/face queries %d ---\n", numRayFace);
+        #endif
+        }
+    }
+    
+}
 
 
 extern "C"
 {
     using namespace Reylax;
 
-
-    u32 rlResetRayBoxQueue(Store<RayBox>* queue)
+    u32 rlDoTrace(u32 numRays, const vec3& eye, const mat3& orient,
+                  Store<RayBox>** rbQueues, Store<RayBox>* leafQueue, Store<RayFace>* rayFaceQueue,
+                  const vec3* rayOris, const vec3* rayDirs, 
+                  const BvhNode* bvhNodes, const Face* faces, const FaceCluster* faceClusters,
+                  RayFaceHitCluster* hitResultClusters, const MeshData* meshData)
     {
-        if (!queue) return ERROR_INVALID_PARAMETER;
-    #if RL_CUDA
-        ResetRayBoxKernel<<<1, 1>>>(queue);
-    #else
-        ResetRayBoxKernel(queue);
-    #endif
-        return ERROR_ALL_FINE;
-    }
-
-    u32 rlResetRayLeafQueue(Store<RayBox>* queue)
-    {
-        if (!queue) return ERROR_INVALID_PARAMETER;
-    #if RL_CUDA
-        ResetRayLeafKernel<<<1, 1>>>(queue);
-    #else
-        ResetRayLeafKernel(queue);
-    #endif
-        return ERROR_ALL_FINE;
-    }
-
-    u32 rlResetRayFaceQueue(Store<RayFace>* queue)
-    {
-        if ( !queue ) return ERROR_INVALID_PARAMETER;
-    #if RL_CUDA
-        ResetRayFaceKernel<<<1, 1>>>(queue);
-    #else
-        ResetRayFaceKernel(queue);
-    #endif
-        return ERROR_ALL_FINE;
-    }
-
-    u32 rlSetInitialRbQueries(u32 numRays, Store<RayBox>* queue)
-    {
-        if ( numRays==0 || !queue ) return ERROR_INVALID_PARAMETER;
-        dim3 blocks  ((numRays + BLOCK_THREADS-1)/BLOCK_THREADS);
-        dim3 threads (BLOCK_THREADS);
-    #if RL_CUDA
-        SetInitialRbQueriesKernel<<<blocks, threads>>>( numRays, queue );
-    #else
-        emulateCpu(BLOCK_THREADS, blocks, threads, [=]()
-        {
-            SetInitialRbQueriesKernel(numRays, queue);
-        });
-    #endif
-        return ERROR_ALL_FINE;
-    }
-
-    u32 rlRayBox(const float* eye3,
-                 const float* orient3x3,
-                 u32 numRayBoxes,
-                 Store<RayBox>* rayBoxQueueIn,
-                 Store<RayBox>* rayBoxQueueOut,
-                 Store<RayBox>* leafQueue,
-                 const vec3* rayDirs,
-                 const BvhNode* bvhNodes)
-    {
-        if ( numRayBoxes==0 || !rayBoxQueueIn || !rayBoxQueueOut || !leafQueue || !rayDirs || !bvhNodes )
-        {
-            return ERROR_INVALID_PARAMETER;
-        }
-        vec3 eye = *(vec3*)eye3;
-        mat3 orient = *(mat3*)orient3x3;
-        dim3 blocks  ((numRayBoxes + BLOCK_THREADS-1)/BLOCK_THREADS);
-        dim3 threads (BLOCK_THREADS);
-    #if RL_CUDA
-        RayBoxKernel<<< blocks, threads >>>( eye, orient, numRayBoxes, rayBoxQueueIn, rayBoxQueueOut, leafQueue, rayDirs, bvhNodes );
-    #else
-        emulateCpu(BLOCK_THREADS, blocks, threads, [=]()
-        { 
-            RayBoxKernel( eye, orient, numRayBoxes, rayBoxQueueIn, rayBoxQueueOut, leafQueue, rayDirs, bvhNodes );
-        });
-    #endif
-
-        return ERROR_ALL_FINE;
-    }
-
-    u32 rlExpandLeafs(u32 numRayLeafQueries,
-                      Store<RayBox>* leafQueue,
-                      Store<RayFace>* rayFaceQueue,
-                      const BvhNode* bvhNodes,
-                      const FaceCluster* faceClusters)
-    {
-        if ( numRayLeafQueries==0 || !leafQueue || !rayFaceQueue || !bvhNodes || !faceClusters )
-        {
-            return ERROR_INVALID_PARAMETER;
-        }
-        dim3 blocks  ((numRayLeafQueries + BLOCK_THREADS-1)/BLOCK_THREADS);
-        dim3 threads (BLOCK_THREADS);
-    #if RL_CUDA
-        LeafExpandKernel<<< blocks, threads >>>(numRayLeafQueries, leafQueue, rayFaceQueue, bvhNodes, faceClusters );
-    #else
-        emulateCpu(BLOCK_THREADS, blocks, threads, [=]()
-        {
-            LeafExpandKernel( numRayLeafQueries, leafQueue, rayFaceQueue, bvhNodes, faceClusters );
-        });
-    #endif
-
+        RL_KERNEL_CALL( 1, 1, 1, TileKernel, 
+                        numRays, eye, orient,
+                        rbQueues, leafQueue, rayFaceQueue, 
+                        rayOris, rayDirs,
+                        bvhNodes, faces, faceClusters,
+                        hitResultClusters, meshData );
         return ERROR_ALL_FINE;
     }
 }

@@ -5,10 +5,6 @@
 #include <vector>
 #include <string>
 
-#define RL_PRINT_STATS 1
-#define DBG_RB_QUERIES 0
-#define DBG_RL_QUERIES 0
-#define DBG_RF_QUERIES 0
 
 #define RL_CUDA_CALL( expr ) \
 { \
@@ -19,6 +15,16 @@
 		exit( 1 ); \
 	} \
 }
+
+#if RL_CUDA
+    #define RL_KERNEL_CALL( bdim, blocks, threads, name, ... ) \
+        name<<<blocks, threads>>>( __VA_ARGS__ )
+#else
+#define RL_KERNEL_CALL( bdim, blocks, threads, name, ... ) \
+            Reylax::emulateCpu( bdim, blocks, threads, [=](){ \
+                name( __VA_ARGS__ ); \
+            })
+#endif
 
 
 namespace Reylax
