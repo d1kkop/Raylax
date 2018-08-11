@@ -7,6 +7,10 @@ using namespace chrono;
 // For now only CUDA implementation. 
 // Perhaps OpenCL, later too.
 
+uint4 cpu_blockDim;
+uint4 cpu_threadIdx;
+uint4 cpu_blockIdx;
+
 namespace Reylax
 {
     void setDevice(u32 device)
@@ -45,10 +49,10 @@ namespace Reylax
         }
     }
 
-    void emulateCpu(u32 blockDim, const dim3& blocks, const dim3& threads, const std::function<void ()>& cb)
+    void emulateCpu(u32 blockDimension, const dim3& blocks, const dim3& threads, const std::function<void ()>& cb)
     {
     #if !RL_CUDA
-        bDim.x = blockDim;
+        bDim.x = blockDimension;
         for ( u32 b=0; b <blocks.x; b++ )
         {
             bIdx.x = b;

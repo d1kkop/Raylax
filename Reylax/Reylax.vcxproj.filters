@@ -70,6 +70,9 @@
     <ClCompile Include="Tracer.cpp">
       <Filter>Core</Filter>
     </ClCompile>
+    <ClCompile Include="KTracer_old.cpp">
+      <Filter>Kernels</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="RTClear.cpp">

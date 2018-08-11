@@ -12,7 +12,7 @@ using namespace glm;
 #define RL_PRINT_STATS 1
 #define RL_RAY_ITERATIONS 32
 
-#if RL_CUDA 
+#if RL_CUDA
 
 #define GLOBAL __global__
 #define DEVICE __device__
@@ -39,9 +39,9 @@ template <class T> FDEVICE T atomicCAS2(T* lk, T old, T nw) { return atomicCAS(l
 #define INLINE inline
 #define RESTRICT __restrict
 
-static uint4 cpu_blockDim;
-static uint4 cpu_threadIdx;
-static uint4 cpu_blockIdx;
+extern uint4 cpu_blockDim;
+extern uint4 cpu_threadIdx;
+extern uint4 cpu_blockIdx;
 #define bDim cpu_blockDim
 #define tIdx cpu_threadIdx
 #define bIdx cpu_blockIdx

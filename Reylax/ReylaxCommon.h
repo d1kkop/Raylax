@@ -12,8 +12,6 @@
 #define BVH_MAX_DEPTH 64
 #define BVH_DBG_INFO 1
 
-#define TRACER_MAX_HITS_PER_RAY 16
-
 
 namespace Reylax
 {
@@ -30,6 +28,14 @@ namespace Reylax
      {
          u32 ray;
          u32 node;
+     };
+
+     __align__(4)
+     struct RayLeaf
+     {
+         u32 ray;
+         u32 node;
+         u32 faceIdx;
      };
 
      __align__(4)
@@ -51,14 +57,6 @@ namespace Reylax
             return faces[idx];
         }
     };
-
-     // Each pixel has a cluster of hit results. A list of hits.
-     __align__(8)
-    struct HitCluster
-     {
-         HitResult results[TRACER_MAX_HITS_PER_RAY];
-         u32 count;
-     };
 
     struct BvhNode
     {

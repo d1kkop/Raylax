@@ -120,15 +120,17 @@ namespace Reylax
                 }
 
                 assert( faceClusterIndexer < numFacesClusters );
-                node->left  = (1<<31) | (u32)st->faces.size(); // Leaf bit | num triangles
-                node->right = faceClusterIndexer++;
+                u32 numFaces = _min( (u32)st->faces.size(), (u32)BVH_NUM_FACES_IN_LEAF );
+                node->left   = (1<<31) | numFaces; // Leaf bit | num triangles
+                node->right  = faceClusterIndexer++;
                 FaceCluster* cluster = fc + node->right;
-                cluster->numFaces = _min( (u32)st->faces.size(), (u32)BVH_NUM_FACES_IN_LEAF );
+                cluster->numFaces    = numFaces;
+                assert( BVH_GETNUM_TRIANGLES(node->left)== cluster->numFaces );
                 for ( u32 i=0; i<cluster->numFaces; ++i )
                 {
                     assert( faceIndexer < allocatedFaceCount );
                     Face* fNew = faces + faceIndexer++;
-                    *fNew = st->faces[0];
+                    *fNew = st->faces[i];
                     cluster->faces[i] = faceIndexer-1;
                 }
             }
