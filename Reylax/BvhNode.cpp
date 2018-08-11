@@ -99,7 +99,7 @@ namespace Reylax
             bMin = max( bMin, st->bMin );
             bMax = min( bMax, st->bMax );
 
-            // bbox of new nde os now determined
+            // bbox of new node is now determined
             BvhNode* node = nodes + nodeIndexer++;
             node->cp = centre;
             node->hs = (bMax-bMin)*0.5001f;
@@ -230,6 +230,7 @@ namespace Reylax
     {
         bMin = vec3(FLT_MAX);
         bMax = vec3(FLT_MIN);
+        centre = vec3(0);
         for ( auto& f : st->faces )
         {
             const vec3* vd  = (const vec3*)(meshData[f.w])->vertexData[VERTEX_DATA_POSITION];
@@ -292,7 +293,7 @@ namespace Reylax
             }
         }
 
-        printf("NumNodes %d, MaxDepth %d, AvgDepth %zd, NumLeafs %zd, numFaces %zd, avgFacesPerLeaf %zd, maxFacesInLeaf %zd\n",
+        printf("NumNodes %d, MaxDepth %d, AvgDepth %zd, NumLeafs %zd, NumFaces %zd, avgFacesPerLeaf %zd, maxFacesInLeaf %zd\n",
                numNodes, maxDepth, avgDepth/numLeafs, numLeafs, numFaces, avgFacesPerLeaf/numLeafs, maxFacesInLeaf);
     }
     

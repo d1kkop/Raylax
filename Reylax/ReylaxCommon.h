@@ -6,11 +6,11 @@
 #define RL_INVALID_INDEX ((u32)-1)
 #define RL_VALID_INDEX( idx ) (idx!=RL_INVALID_INDEX)
 
-#define BVH_NUM_FACES_IN_LEAF 64
+#define BVH_NUM_FACES_IN_LEAF 32
 #define BVH_ISLEAF( idx ) ((idx>>31)==1)
 #define BVH_GETNUM_TRIANGLES(idx) (idx&0x7FFFFFF)
-#define BVH_MAX_DEPTH 32
-#define BVH_DBG_INFO 0
+#define BVH_MAX_DEPTH 64
+#define BVH_DBG_INFO 1
 
 #define TRACER_MAX_HITS_PER_RAY 16
 

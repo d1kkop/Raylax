@@ -23,7 +23,7 @@ namespace Reylax
 
     // ------ GpuStaticScene ----------------------------------------------------------------------------------------
 
-    IGpuStaticScene* IGpuStaticScene::create(IMesh** meshes, u32 numMeshes)
+    IGpuStaticScene* IGpuStaticScene::create(const IMesh* const* meshes, u32 numMeshes)
     {
         if ( !meshes || numMeshes==0 )
             return nullptr;
@@ -56,6 +56,7 @@ namespace Reylax
             return nullptr;
         }
 
+        // Convert cpu meshes to gpu versions and make an array of meshPtrs to access them from index 0 to x.
         gpuScene->m_gpuMeshes = new GpuStaticMesh[numMeshes];
         for ( u32 i=0; i<numMeshes; ++i )
         {

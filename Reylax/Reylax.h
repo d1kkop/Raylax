@@ -46,7 +46,7 @@ namespace Reylax
 
     struct IGpuStaticScene
     {
-        RL_DLL static IGpuStaticScene* create(IMesh** meshes, u32 numMeshes);
+        RL_DLL static IGpuStaticScene* create(const IMesh* const* meshes, u32 numMeshes);
         virtual ~IGpuStaticScene() = default;
     };
 
