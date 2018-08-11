@@ -131,36 +131,47 @@ struct Program
     {
         u32 err=0;
 
-        pr.start();
-        err = rt->lock();
-        assert(err==0);
-        pr.stop("Lock");
-
-        pr.start();
-        for ( int i = 0; i<1; i++ )
+        // Unlock
         {
-            err = rt->clear(255);
+            pr.start();
+            err = rt->unlock();
             assert(err==0);
+            pr.stop("Unlock");
         }
-        syncDevice();
-        pr.stop("Clear");
 
-        pr.start();
-        err = rt->unlock();
-        assert(err==0);
-        pr.stop("Unlock");
+        // Lock
+        {
+            pr.start();
+            err = rt->lock();
+            assert(err==0);
+            pr.stop("Lock");
+        }
+
+        // Clear
+        {
+            pr.start();
+            for ( int i = 0; i<1; i++ )
+            {
+                err = rt->clear(255);
+                assert(err==0);
+            }
+            syncDevice();
+            pr.stop("Clear");
+        }
 
         // Primary rays
-        pr.start();
         {
-            mat4 yaw   = rotate(camPan, vec3(0.f, 1.f, 0.f));
-            mat4 pitch = rotate(camPitch, vec3(1.f, 0.f, 0.f));
-            mat3 orient = (yaw * pitch);
-            err = tracer->trace((const float*)&camPos, (const float*)&orient, scene, query, &result, 1);
-            assert(err==0);
+            pr.start();
+            {
+                mat4 yaw   = rotate(camPan, vec3(0.f, 1.f, 0.f));
+                mat4 pitch = rotate(camPitch, vec3(1.f, 0.f, 0.f));
+                mat3 orient = (yaw * pitch);
+                err = tracer->trace((const float*)&camPos, (const float*)&orient, scene, query, &result, 1);
+                assert(err==0);
+            }
+            syncDevice();
+            pr.stop("Trace");
         }
-        syncDevice();
-        pr.stop("Trace");
 
         // Draw fulls creen quad and copy buffer to gl render target.
         pr.start();
@@ -240,7 +251,7 @@ int main(int argc, char** argv)
     }
     scene = IGpuStaticScene::create(meshes.data(), (u32)meshes.size());
     assert(scene);
-    for (auto& m : meshes) delete m;
+    for ( auto& m : meshes ) delete m;
 
     // All primary rays only have a unique direction, set this up.
     vec3* rays = createPrimaryRays(width, height, -1, 1, 1, -1, 1);
@@ -258,7 +269,7 @@ int main(int argc, char** argv)
     // Update loop
     Program p;
     Profiler pr;
- //   rt->lock();
+    rt->lock();
     double tBegin = time();
     u32 numFrames = 0;
     while ( !p.loopDone )

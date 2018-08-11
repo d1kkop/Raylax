@@ -46,7 +46,7 @@ namespace Reylax
 
     struct IGpuStaticScene
     {
-        RL_DLL static IGpuStaticScene* create(IMesh* const * meshes, u32 numMeshes);
+        RL_DLL static IGpuStaticScene* create(IMesh** meshes, u32 numMeshes);
         virtual ~IGpuStaticScene() = default;
     };
 
@@ -66,7 +66,8 @@ namespace Reylax
     {
         RL_DLL static ITracer* create();
         virtual ~ITracer() = default;
-        virtual u32 trace( const float* eye3, const float* orient3x3, const IGpuStaticScene* scene, const ITraceQuery* query, const ITraceResult* const* results, u32 numResults ) = 0;
+        virtual u32 trace( const float* eye3, const float* orient3x3,
+                           const IGpuStaticScene* scene, const ITraceQuery* query, const ITraceResult* const* results, u32 numResults ) = 0;
     };
 
 

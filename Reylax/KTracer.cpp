@@ -92,8 +92,8 @@ namespace Reylax
                                const vec3* rayOris,
                                const vec3* rayDirs,
                                const Face* faces,
-                               RayFaceHitCluster* hitResultClusters,
-                               const MeshData* meshData)
+                               HitCluster* hitResultClusters,
+                               const MeshData* const* meshData)
     {
         u32 i = bIdx.x * bDim.x + tIdx.x;
         if ( i >= numRayFaceQueries ) return;
@@ -105,12 +105,12 @@ namespace Reylax
         float dist = FaceRayIntersect(face, o, d, meshData, u, v);
         if ( dist != FLT_MAX )
         {
-            RayFaceHitCluster* hitCluster = hitResultClusters + rf->ray;
+            HitCluster* hitCluster = hitResultClusters + rf->ray;
             u32 curHitIdx = atomicAdd2<u32>(&hitCluster->count, 1);
             assert( curHitIdx < TRACER_MAX_HITS_PER_RAY );
             if ( curHitIdx < TRACER_MAX_HITS_PER_RAY )
             {
-                RayFaceHitResult* result = hitCluster->results + curHitIdx;
+                HitResult* result = hitCluster->results + curHitIdx;
                 result->u = u;
                 result->v = v;
                 result->dist = dist;
@@ -125,29 +125,29 @@ namespace Reylax
     }
 
     GLOBAL void FindClosestHit(u32 numRays,
-                               RayFaceHitCluster* hitResultClusters,
-                               RayFaceHitResult* finalResults)
+                               HitCluster* hitResultClusters,
+                               HitResult* finalResults)
     {
         u32 i = bIdx.x * bDim.x + tIdx.x;
         if ( i >= numRays ) return;
-        RayFaceHitCluster* hitCluster = hitResultClusters + i;
-        RayFaceHitResult* results     = hitCluster->results;
+        HitCluster* hitCluster = hitResultClusters + i;
+        HitResult* results     = hitCluster->results;
         u32 count   = hitCluster->count;
         float fDist = FLT_MAX;
         u32 closest = RL_INVALID_INDEX;
         for ( u32 k=0; k<count; ++k )
         {
-            RayFaceHitResult* result = results + k;
+            HitResult* result = results + k;
             if ( result->dist < fDist )
             {
                 fDist = result->dist;
                 closest = k;
             }
         }
-        RayFaceHitResult* finResult = finalResults + i;
+        HitResult* finResult = finalResults + i;
         if ( RL_VALID_INDEX(closest) )
         {
-            memcpy( finResult, results + closest, sizeof(RayFaceHitResult) );
+            memcpy( finResult, results + closest, sizeof(HitResult) );
         }
         else
         {
@@ -166,14 +166,15 @@ namespace Reylax
                            const BvhNode* bvhNodes,
                            const Face* faces,
                            const FaceCluster* faceClusters,
-                           RayFaceHitCluster* hitResultClusters,
-                           const MeshData* meshData)
+                           HitCluster* hitResultClusters,
+                           const MeshData* const* meshData,
+                           HitResult** hitResults, u32 numResults)
     {
         g_eye    = eye;
         g_orient = orient;
 
         rbQueues[0]->m_top = 0;
-        leafQueue->m_top  = 0;
+        leafQueue->m_top   = 0;
         rayFaceQueue->m_top = 0;
 
         // Set up initial Ray/box queries
@@ -257,25 +258,4 @@ namespace Reylax
         }
     }
     
-}
-
-
-extern "C"
-{
-    using namespace Reylax;
-
-    u32 rlDoTrace(u32 numRays, const vec3& eye, const mat3& orient,
-                  Store<RayBox>** rbQueues, Store<RayBox>* leafQueue, Store<RayFace>* rayFaceQueue,
-                  const vec3* rayOris, const vec3* rayDirs, 
-                  const BvhNode* bvhNodes, const Face* faces, const FaceCluster* faceClusters,
-                  RayFaceHitCluster* hitResultClusters, const MeshData* meshData)
-    {
-        RL_KERNEL_CALL( 1, 1, 1, TileKernel, 
-                        numRays, eye, orient,
-                        rbQueues, leafQueue, rayFaceQueue, 
-                        rayOris, rayDirs,
-                        bvhNodes, faces, faceClusters,
-                        hitResultClusters, meshData );
-        return ERROR_ALL_FINE;
-    }
 }

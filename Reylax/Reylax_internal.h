@@ -21,10 +21,19 @@
         name<<<blocks, threads>>>( __VA_ARGS__ )
 #else
 #define RL_KERNEL_CALL( bdim, blocks, threads, name, ... ) \
-            Reylax::emulateCpu( bdim, blocks, threads, [=](){ \
+            Reylax::emulateCpu( bdim, blocks, threads, [=]() { \
                 name( __VA_ARGS__ ); \
             })
 #endif
+
+#define DELETE_AND_NULL( p ) delete p; p=nullptr
+#define DELETE_AR_AND_NULL( p ) delete [] p; p=nullptr;
+#define COPY_VALUE_TO_DEVICE_ASYNC( dst, value, str, member, size ) Reylax::hostOrDeviceCpy( dst->ptr<char>() + offsetof(str, member), &value, size, cudaMemcpyHostToDevice, true )
+#define COPY_PTR_TO_DEVICE_ASYNC( dst, src, str, member ) \
+{\
+    u64 pVal = (u64)(src)->ptr<char>(); \
+    COPY_VALUE_TO_DEVICE_ASYNC( (dst), pVal, str, member, sizeof(char*)); \
+}
 
 
 namespace Reylax

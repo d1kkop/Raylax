@@ -1,4 +1,6 @@
 #include "Mesh.h"
+#include "DeviceBuffer.h"
+#include "Reylax_internal.h"
 #include <cassert>
 #include <memory>
 using namespace std;
@@ -17,25 +19,19 @@ namespace Reylax
 
     Mesh::Mesh()
     {
-        d.numVertices = 0;
-        d.numIndices = 0;
-        d.indices = nullptr;
-        for (auto& p : d.vertexData) p = nullptr;
-        for (u32 & vds : d.vertexDataSizes) vds = 0;
+        memset(&d, 0, sizeof(MeshData));
     }
 
     Mesh::~Mesh()
     {
-        delete [] d.indices;
-        for ( auto& p : d.vertexData ) delete [] p;
     }
 
     u32 Mesh::setVertexData(const float* vertexData, u32 numVertices, u32 numComponents, u32 slotId)
     {
         if ( !vertexData || numVertices==0 || slotId >= VERTEX_DATA_COUNT || numComponents > 4 ||
              (d.numVertices!=0 && d.numVertices!=numVertices) ||
-             (slotId == VERTEX_DATA_POSITION && numComponents != 3 )
-            )
+             (slotId == VERTEX_DATA_POSITION && numComponents != 3)
+           )
         {
             return ERROR_INVALID_PARAMETER;
         }
@@ -43,6 +39,7 @@ namespace Reylax
         if ( !d.vertexData[slotId] ) return ERROR_GPU_ALLOC_FAIL;
         memcpy( d.vertexData[slotId], vertexData, numComponents*numVertices*sizeof(float) );
         d.vertexDataSizes[slotId] = numComponents;
+        d.numVertices = numVertices;
         return ERROR_ALL_FINE;
     }
 

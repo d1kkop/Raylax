@@ -29,7 +29,7 @@ namespace Reylax
     __declspec(align(8))
     struct Face
     {
-        Material* mat;
+        const Material* mat;
         u32 x, y, z, w;
     };
 
@@ -45,13 +45,13 @@ namespace Reylax
     };
 
     __declspec(align(8))
-    struct RayFaceHitResult
+    struct HitResult
     {
-        Face* face;
+        const Face* face;
         float dist, u, v;
         float ro[3];
         float rd[3];
     };
 
-    using HitCallback = void (*)(const RayFaceHitResult*, const MeshData*, void**);
+    using HitCallback = void (*)(const HitResult*, const MeshData*, void**);
 }

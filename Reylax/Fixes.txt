@@ -3,3 +3,5 @@
 // GLM -> HACK to get rid of annotation warnings for defaulted constructors see setup.hpp line: 721
 #undef GLM_HAS_DEFAULTED_FUNCTIONS
 #define GLM_HAS_DEFAULTED_FUNCTIONS 0
+
+// For dynamic paralellism to work use compute 3.5 or higher and must compile with 'rdc=true' enabled in cuda options.

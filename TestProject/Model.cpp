@@ -33,7 +33,8 @@ bool loadModel(const std::string& name, vector<IMesh*>& meshes)
                                                 aiProcess_JoinIdenticalVertices  |
                                                 aiProcess_SortByPType);
     // If the import failed, report it
-    if ( !scene ) {
+    if ( !scene ) 
+    {
         cout << importer.GetErrorString() << endl;
         assert(false);
         return false;

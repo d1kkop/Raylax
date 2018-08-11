@@ -39,13 +39,7 @@ namespace Reylax
          u32 face;
      };
 
-     __align__(8)
-     struct RayFaceHitCluster
-     {
-         RayFaceHitResult results[TRACER_MAX_HITS_PER_RAY];
-         u32 count;
-     };
-
+     // Each leaf BVH node has a faceCluster. It holds a list of faces.
      __align__(4)
     struct FaceCluster
     {
@@ -57,6 +51,14 @@ namespace Reylax
             return faces[idx];
         }
     };
+
+     // Each pixel has a cluster of hit results. A list of hits.
+     __align__(8)
+    struct HitCluster
+     {
+         HitResult results[TRACER_MAX_HITS_PER_RAY];
+         u32 count;
+     };
 
     struct BvhNode
     {
@@ -160,10 +162,10 @@ namespace Reylax
                 (dot(v0v2, qvec)*invDet)));
     }
 
-    FDEVICE INLINE float FaceRayIntersect(const Face* face, const vec3& eye, const vec3& dir, const MeshData* meshData, float& u, float& v)
+    FDEVICE INLINE float FaceRayIntersect(const Face* face, const vec3& eye, const vec3& dir, const MeshData* const* meshData, float& u, float& v)
     {
         assert(meshData);
-        const MeshData* mesh = &meshData[face->w];
+        const MeshData* mesh = meshData[face->w];
         vec3* vp = (vec3*)mesh->vertexData[VERTEX_DATA_POSITION];
         assert(mesh->vertexDataSizes[VERTEX_DATA_POSITION] == 3);
         return TriIntersect(eye, dir, vp[face->x], vp[face->y], vp[face->z], u, v);
