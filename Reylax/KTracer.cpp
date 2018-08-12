@@ -41,11 +41,13 @@ namespace Reylax
         // set rayOri from eye
         (rayOris + rb->ray)[0] = g_eye;
 
+        vec3 o   = g_eye;
         vec3 cp  = node->cp;
         vec3 hs  = node->hs;
-        vec3 invDir(1.f/d.x, 1.f/d.y, 1.f/d.z);
+    //    vec3 invDir(1.f/d.x, 1.f/d.y, 1.f/d.z);
 
-        if ( BoxRayIntersect(cp-hs, cp+hs, g_eye, invDir) )
+        if ( PointInAABB( o, cp-hs, cp+hs ) )
+//        if ( BoxRayIntersect(cp-hs, cp+hs, o, invDir) )
         {
             if ( node->isLeaf() )
             {
@@ -90,19 +92,39 @@ namespace Reylax
         u32 numFaces = leaf->numFaces();
         assert(leaf->isLeaf() && rl->faceIdx < numFaces);
         u32 ray = rl->ray;
-        u32 faceIdx = rl->faceIdx;
-        const Face* face = faces + leaf->getFace(faceClusters, faceIdx);
         const vec3& o = rayOris[ray];
         const vec3& d = rayDirs[ray];
-        float u, v;
-        float dist = FaceRayIntersect(face, o, d, meshData, u, v);
+        u32 faceIdx   = rl->faceIdx;
+        u32 loopCnt   = _min(numFaces - rl->faceIdx, 4U);  // Change this to reduce number of writes back to global memory at the cost of more idling threads
         HitResult* result = hitResults + ray;
-        if ( dist < result->dist )
+        float fDist = result->dist;                     // Continue comparing with last store hit result distance
+        float fU = -1.f;
+        float fV = -1.f;
+        const Face* closestFace = nullptr;
+
+        // Check N faces, increase number for less writes back to memory at the cost of more idling threads (divergent execution).
+    #pragma unroll
+        for ( u32 k=0; k<loopCnt; ++k )
         {
-            result->u = u;
-            result->v = v;
-            result->dist = dist;
-            result->face = face;
+            const Face* face = faces + leaf->getFace(faceClusters, faceIdx++);
+            float u, v;
+            float dist = FaceRayIntersect(face, o, d, meshData, u, v);
+            if ( dist < fDist )
+            {
+                fU = u;
+                fV = v;
+                fDist = dist;
+                closestFace = face;
+            }
+        }
+
+        // New closer distance was found, write back to global memory
+        if ( fU != -1.f ) 
+        {
+            result->u = fU;
+            result->v = fV;
+            result->dist = fDist;
+            result->face = closestFace;
         #pragma unroll
             for ( u32 i=0; i<3; ++i )
             {
@@ -110,12 +132,21 @@ namespace Reylax
                 result->rd[i] = d[i];
             }
         }
-        if ( ++faceIdx < numFaces )
+
+        // If there are still faces left to process, queue new Ray/Leaf item
+        if ( faceIdx < numFaces )
         {
-             rl = leafQueueOut->getNew(1);
-             rl->faceIdx = faceIdx;
-             rl->node = node;
-             rl->ray  = ray;
+            rl = leafQueueOut->getNew(1);
+            rl->faceIdx = faceIdx;
+            rl->node = node;
+            rl->ray  = ray;
+        }
+        else // If no faces left to process, march ray to next box
+        {
+            vec3 hs = leaf->hs;
+            vec3 cp = leaf->cp;
+            vec3 invDir(1.f/d.x, 1.f/d.y, 1.f/d.z);
+            BoxRayIntersect( cp-hs, cp+hs, o, invDir );
         }
     }
 

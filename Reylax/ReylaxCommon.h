@@ -207,6 +207,17 @@ namespace Reylax
         return true;
     }
 
+    FDEVICE INLINE bool PointInAABB(const vec3& pnt, const vec3& bMin, const vec3& bMax)
+    {
+        if ( pnt[0] > bMax[0] ) return false;
+        if ( pnt[1] > bMax[1] ) return false;
+        if ( pnt[2] > bMax[2] ) return false;
+        if ( pnt[0] < bMin[0] ) return false;
+        if ( pnt[1] < bMin[1] ) return false;
+        if ( pnt[2] < bMin[2] ) return false;
+        return true;
+    }
+
     FDEVICE INLINE void ValidateAABB(const vec3& bMin, const vec3& bMax)
     {
         u32 dZero = 0;
