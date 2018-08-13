@@ -48,7 +48,8 @@ namespace Reylax
         u32 err = BvhNode::build(mds.data(), (u32)mds.size(),
                                  &gpuScene->m_bvhTree,
                                  &gpuScene->m_faces,
-                                 &gpuScene->m_faceClusters);
+                                 &gpuScene->m_faceClusters,
+                                 &gpuScene->m_sides);
 
         if ( err != ERROR_ALL_FINE )
         {
@@ -99,6 +100,7 @@ namespace Reylax
         m_bvhTree(nullptr),
         m_faces(nullptr),
         m_faceClusters(nullptr),
+        m_sides(nullptr),
         m_meshDataPtrs(nullptr),
         m_gpuMeshes(nullptr)
     {
@@ -109,6 +111,7 @@ namespace Reylax
         delete m_bvhTree;
         delete m_faces;
         delete m_faceClusters;
+        delete m_sides;
         delete m_meshDataPtrs;
         delete m_gpuMeshes;
     }
@@ -128,7 +131,8 @@ namespace Reylax
     TraceQuery::TraceQuery(const float* rays3, u32 numRays):
         m_numRays(numRays),
         m_oris(new DeviceBuffer(sizeof(float)*3*numRays)), /* oris are for secondary ray launches */
-        m_dirs(new DeviceBuffer(sizeof(float)*3*numRays))
+        m_dirs(new DeviceBuffer(sizeof(float)*3*numRays)),
+        m_signs(new DeviceBuffer(sizeof(char)*3*m_numRays))
     {
         assert(numRays!=0);
         m_dirs->copyFrom(rays3, false);
@@ -138,6 +142,7 @@ namespace Reylax
     {
         delete m_oris;
         delete m_dirs;
+        delete m_signs;
     }
 
     // ------ TraceResult ----------------------------------------------------------------------------------------

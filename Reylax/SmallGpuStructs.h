@@ -22,6 +22,7 @@ namespace Reylax
         DeviceBuffer* m_bvhTree;
         DeviceBuffer* m_faces;
         DeviceBuffer* m_faceClusters;
+        DeviceBuffer* m_sides;
         DeviceBuffer* m_meshDataPtrs;
         GpuStaticMesh* m_gpuMeshes;
     };
@@ -33,6 +34,7 @@ namespace Reylax
         u32 m_numRays;
         DeviceBuffer* m_oris;
         DeviceBuffer* m_dirs;
+        DeviceBuffer* m_signs;
     };
 
     struct TraceResult: public ITraceResult

@@ -10,13 +10,15 @@ namespace Reylax
     GLOBAL void TileKernel(u32 numRays,
                            vec3 eye,
                            mat3 orient,
-                           Store<RayBox>** rbQueues,
+                           Store<PointBox>** pbQueues,
                            Store<RayLeaf>** leafQueues,
+                           char* raySigns,
                            vec3* rayOris,
                            const vec3* rayDirs,
                            const BvhNode* bvhNodes,
                            const Face* faces,
                            const FaceCluster* faceClusters,
+                           const u32* sides,
                            const MeshData* const* meshData,
                            HitResult* hitResults);
 
@@ -26,15 +28,15 @@ namespace Reylax
         return new Tracer();
     }
 
-    Tracer::Tracer(u32 numRayBoxQueries, u32 numLeafQueries, u32 numRaysPerTile):
-        m_numRayBoxQueries(numRayBoxQueries),
+    Tracer::Tracer(u32 numPointBoxQueries, u32 numLeafQueries, u32 numRaysPerTile):
+        m_numPointBoxQueries(numPointBoxQueries),
         m_numRayLeafQueries(numLeafQueries),
         m_numRaysPerTile(numRaysPerTile)
     {
         for ( u32 i=0; i<2; i++ )
         {
-            m_rayBoxQueue[i]  = nullptr;
-            m_rayBoxBuffer[i] = nullptr;
+            m_pointBoxQueue[i]  = nullptr;
+            m_pointBoxBuffer[i] = nullptr;
             m_leafQueue[i]  = nullptr;
             m_leafBuffer[i] = nullptr;
         }
@@ -45,12 +47,12 @@ namespace Reylax
         
         for ( u32 i=0; i<2; i++ )
         {
-            m_rayBoxQueue[i]  = new DeviceBuffer(sizeof(Store<RayBox>));
-            m_rayBoxBuffer[i] = new DeviceBuffer(numRayBoxQueries*sizeof(RayBox));
+            m_pointBoxQueue[i]  = new DeviceBuffer(sizeof(Store<PointBox>));
+            m_pointBoxBuffer[i] = new DeviceBuffer(numPointBoxQueries*sizeof(PointBox));
             m_leafQueue[i]  = new DeviceBuffer(sizeof(Store<RayLeaf>));
             m_leafBuffer[i] = new DeviceBuffer(numLeafQueries*sizeof(RayLeaf));
         #if RL_PRINT_STATS
-            printf("RayBoxQueries %d, count %d, size %.3fmb\n", i, numRayBoxQueries, (float)m_rayBoxBuffer[i]->size()/1024/1024);
+            printf("PointBoxQueries %d, count %d, size %.3fmb\n", i, numPointBoxQueries, (float)m_pointBoxBuffer[i]->size()/1024/1024);
             printf("RayLeafQueries %d, count %d, size %.3fmb\n", i, numLeafQueries, (float)m_leafBuffer[i]->size()/1024/1024);
         #endif
         }
@@ -58,8 +60,8 @@ namespace Reylax
         // Assign device buffers to queue elements ptr
         for ( u32 i=0; i<2; i++ )
         {
-            COPY_PTR_TO_DEVICE_ASYNC(m_rayBoxQueue[i], m_rayBoxBuffer[i], Store<RayBox>, m_elements);
-            COPY_VALUE_TO_DEVICE_ASYNC(m_rayBoxQueue[i], numRayBoxQueries, Store<RayBox>, m_max, sizeof(u32));
+            COPY_PTR_TO_DEVICE_ASYNC(m_pointBoxQueue[i], m_pointBoxBuffer[i], Store<PointBox>, m_elements);
+            COPY_VALUE_TO_DEVICE_ASYNC(m_pointBoxQueue[i], numPointBoxQueries, Store<PointBox>, m_max, sizeof(u32));
             COPY_PTR_TO_DEVICE_ASYNC(m_leafQueue[i], m_leafBuffer[i], Store<RayLeaf>, m_elements);
             COPY_VALUE_TO_DEVICE_ASYNC(m_leafQueue[i], numLeafQueries, Store<RayLeaf>, m_max, sizeof(u32));
         }
@@ -67,7 +69,7 @@ namespace Reylax
         u64 totalMemory = 0;
         for ( u32 i=0; i<2; i++ )
         {
-            totalMemory += m_rayBoxBuffer[i]->size() + m_rayBoxQueue[i]->size();
+            totalMemory += m_pointBoxBuffer[i]->size() + m_pointBoxQueue[i]->size();
             totalMemory += m_leafBuffer[i]->size() + m_leafQueue[i]->size();
         }
         
@@ -81,8 +83,8 @@ namespace Reylax
         {
             delete m_leafQueue[i];
             delete m_leafBuffer[i];
-            delete m_rayBoxQueue[i];
-            delete m_rayBoxQueue[i];
+            delete m_pointBoxQueue[i];
+            delete m_pointBoxBuffer[i];
         }
     }
 
@@ -107,13 +109,15 @@ namespace Reylax
 
         vec3 eye                        = *(vec3*)eye3;
         mat3 orient                     = *(mat3*)orient3x3;
-        Store<RayBox>* rbQueues[]       = { m_rayBoxQueue[0]->ptr<Store<RayBox>>(), m_rayBoxQueue[1]->ptr<Store<RayBox>>() };
+        Store<PointBox>* pbQueues[]     = { m_pointBoxQueue[0]->ptr<Store<PointBox>>(), m_pointBoxQueue[1]->ptr<Store<PointBox>>() };
         Store<RayLeaf>* leafQueues[]    = { m_leafQueue[0]->ptr<Store<RayLeaf>>(), m_leafQueue[1]->ptr<Store<RayLeaf>>() };
-        vec3* rayOris                   = trq->m_oris->ptr<vec3>(); // Not const, because first origin is derived from eye
+        char* raySigns                  = trq->m_signs->ptr<char>();    // not const, because changes each time ray dir changes
+        vec3* rayOris                   = trq->m_oris->ptr<vec3>();     // Not const, because first origin is derived from eye
         const vec3* rayDirs             = trq->m_dirs->ptr<const vec3>();
         const BvhNode* bvhNodes         = scn->m_bvhTree->ptr<const BvhNode>();
         const Face* faces               = scn->m_faces->ptr<const Face>();
         const FaceCluster* faceClusters = scn->m_faceClusters->ptr<const FaceCluster>();
+        const u32* sides                = scn->m_sides->ptr<const u32>();
         MeshData** meshData             = scn->m_meshDataPtrs->ptr<MeshData*>();
 
         u32 totalRays = trq->m_numRays;
@@ -128,9 +132,9 @@ namespace Reylax
 
             RL_KERNEL_CALL(1, 1, 1, TileKernel,
                            numRaysThisTile, eye, orient,
-                          (Store<RayBox>**) rbQueues, (Store<RayLeaf>**) leafQueues,
-                           rayOris, rayDirs,
-                           bvhNodes, faces, faceClusters,
+                          (Store<PointBox>**) pbQueues, (Store<RayLeaf>**) leafQueues,
+                           raySigns, rayOris, rayDirs,
+                           bvhNodes, faces, faceClusters, sides,
                            meshData,
                            hitResults[0]);
 

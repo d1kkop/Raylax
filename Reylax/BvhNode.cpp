@@ -14,13 +14,21 @@ namespace Reylax
 
     u32 BvhNode::build(const MeshData** meshData, u32 numMeshDatas,
                        DeviceBuffer** ppBvhTree,
+                       DeviceBuffer** ppSides,
                        DeviceBuffer** ppFaces,
                        DeviceBuffer** ppFaceClusters)
     {
-        if ( !meshData || numMeshDatas == 0 || !ppBvhTree || !ppFaces || !ppFaceClusters )
+        if ( !meshData || numMeshDatas == 0 || !ppBvhTree || !ppFaces || !ppFaceClusters || !ppSides )
         {
             return ERROR_INVALID_PARAMETER;
         }
+
+        struct stNode
+        {
+            u32 parentIdx, depth, spAxis;
+            std::vector<Face> faces;
+            vec3 bMin, bMax;
+        };
 
         const u32 stSize = 64;
         stNode stack[stSize];
@@ -45,11 +53,10 @@ namespace Reylax
         u32 numFacesClusters = _max<u32>((u32)sqrt(numNodes), allocatedFaceCount/(BVH_NUM_FACES_IN_LEAF/8));
 
     #if RL_PRINT_STATS
-        printf("--- BVH Static scene allocations ---\n\n");
+        printf("--- BVH Static intermediate allocations ---\n\n");
         float bvhSize   = (float)sizeof(BvhNode)*numNodes/1024/1024;
         float faceSize  = (float)sizeof(Face)*allocatedFaceCount/1024/1024;
         float fclusSize = (float)sizeof(BvhNode)*numFacesClusters/1024/1024;
-        printf("Intermediate data\n");
         printf("BvhNodes: %d, size %.3fmb\n", numNodes, bvhSize);
         printf("Faces: %d, size %.3fmb\n", allocatedFaceCount, faceSize);
         printf("Fclusters: %d, size %.3fmb\n", numFacesClusters, fclusSize);
@@ -68,43 +75,37 @@ namespace Reylax
         // setup remaining part of first node in stack (faces for stack[0] have been poplated already)
         stNode* st = stack;
         st->parentIdx = RL_INVALID_INDEX;
-        st->depth = 0;
+        st->depth  = 0;
+        st->spAxis = RL_INVALID_INDEX;
         i32 top=0;
 
         // set bbox of first stack node
-        vec3 centre;
-        determineBbox(st, meshData, st->bMin, st->bMax, centre);
+        determineBbox(st->faces, meshData, st->bMin, st->bMax);
 
         // generate tree
         while ( top >= 0 )
         {
             st = &stack[top--];
 
+            // bbox of new node is now determined
+            BvhNode*node = nodes + nodeIndexer++;
+            node->bMin   = st->bMin;
+            node->bMax   = st->bMax;
+            node->left   = 0;
+            node->right  = 0;
+
             // If cur stack node has valid parent index, we can now efficiently assign index children of parent
             // such that the indexing of nodes: 0, 1, 2... is linear in memory.
             if ( RL_VALID_INDEX(st->parentIdx) )
             {
                 BvhNode* parent = nodes + st->parentIdx;
-                if ( !RL_VALID_INDEX(parent->left) ) parent->left = nodeIndexer;
+                if ( !RL_VALID_INDEX(parent->left) ) parent->left = nodeIndexer-1;
                 else
                 {
-                    assert(!RL_VALID_INDEX(parent->right));
-                    parent->right = nodeIndexer;
+                    assert(!RL_VALID_INDEX(BVH_GET_INDEX_RIGHT(parent->right)));
+                    BVH_SET_INDEX_RIGHT(parent->right, nodeIndexer-1);
                 }
             }
-
-            // determine new bbox of popped node and refit to smallest possible
-            vec3 bMin, bMax;
-            determineBbox(st, meshData, bMin, bMax, centre);
-            bMin = max( bMin, st->bMin );
-            bMax = min( bMax, st->bMax );
-
-            // bbox of new node is now determined
-            BvhNode* node = nodes + nodeIndexer++;
-            node->cp = centre;
-            node->hs = (bMax-bMin)*0.5001f;
-            node->left  = RL_INVALID_INDEX;
-            node->right = RL_INVALID_INDEX;
 
             if ( st->depth == BVH_MAX_DEPTH || (u32)st->faces.size() <= BVH_NUM_FACES_IN_LEAF )
             {
@@ -121,11 +122,12 @@ namespace Reylax
 
                 assert( faceClusterIndexer < numFacesClusters );
                 u32 numFaces = _min( (u32)st->faces.size(), (u32)BVH_NUM_FACES_IN_LEAF );
-                node->left   = (1<<31) | numFaces; // Leaf bit | num triangles
-                node->right  = faceClusterIndexer++;
-                FaceCluster* cluster = fc + node->right;
+                BVH_SET_LEAF_AND_FACES( node->left, numFaces );
+                BVH_SET_INDEX_RIGHT( node->right, faceClusterIndexer );
+                faceClusterIndexer++;
+                FaceCluster* cluster = fc + BVH_GET_INDEX_RIGHT( node->right );
                 cluster->numFaces    = numFaces;
-                assert( BVH_GETNUM_TRIANGLES(node->left)== cluster->numFaces );
+                assert( BVH_GETNUM_TRIANGLES(node->left)==cluster->numFaces );
                 for ( u32 i=0; i<cluster->numFaces; ++i )
                 {
                     assert( faceIndexer < allocatedFaceCount );
@@ -137,24 +139,28 @@ namespace Reylax
             else
             {
                 u32 splitAxis = 0;
-                float biggest = node->hs.x;
-                if ( node->hs.y > biggest ) { splitAxis = 1; biggest = node->hs.y; }
-                if ( node->hs.z > biggest ) { splitAxis = 2; }
+                vec3 hs = (node->bMax-node->bMin)*.5f;
+                assert( hs.x>0.f && hs.y>0.f && hs.z>0.f );
+
+                float biggest = hs.x;
+                if ( hs.y > biggest ) { splitAxis = 1; biggest = hs.y; }
+                if ( hs.z > biggest ) { splitAxis = 2; }
             #if BVH_DBG_INFO
                printf("splitAxis %d\n", splitAxis);
             #endif
+                BVH_SET_AXIS( node->right, splitAxis );
 
-                vec3 dbox = bMax-bMin;
-                assert( dbox.x>0.f && dbox.y>0.f && dbox.z>0.f );
-                vec3 lMax = bMax;
-                vec3 rMin = bMin;
+                vec3 centre;
+                determineCentre( st->faces, meshData, centre );
+                vec3 lMax = st->bMax;
+                vec3 rMin = st->bMin;
                 lMax[splitAxis] = centre[splitAxis];
                 rMin[splitAxis] = centre[splitAxis];
 
-                vec3 cpL = (bMin+lMax)*.5f;
-                vec3 hsL = (lMax-bMin)*.5f;
-                vec3 cpR = (rMin+bMax)*.5f;
-                vec3 hsR = (bMax-rMin)*.5f;
+                vec3 cpL = (st->bMin+lMax)*.5f;
+                vec3 hsL = (lMax-st->bMin)*.5f;
+                vec3 cpR = (rMin+st->bMax)*.5f;
+                vec3 hsR = (st->bMax-rMin)*.5f;
 
                 vector<Face> facesL, facesR;
                 for ( auto& f : st->faces )
@@ -179,14 +185,18 @@ namespace Reylax
                 st->parentIdx = nodeIndexer-1;
                 st->faces = move(facesR);
                 st->bMin  = rMin;
-                st->bMax  = bMax;
+                st->bMax  = node->bMax;
+                st->spAxis = splitAxis;
+
                 // left
                 st = &stack[++top];
                 st->depth = depth+1;
                 st->parentIdx = nodeIndexer-1;
                 st->faces = move(facesL);
-                st->bMin  = bMin;
+                st->bMin  = node->bMin;
                 st->bMax  = lMax;
+                st->spAxis = splitAxis;
+
             } // split
         } // while
 
@@ -194,21 +204,65 @@ namespace Reylax
         *ppBvhTree = new DeviceBuffer( sizeof(BvhNode) * nodeIndexer );
         *ppFaces   = new DeviceBuffer( sizeof(Face) * faceIndexer );
         *ppFaceClusters = new DeviceBuffer( sizeof(FaceCluster) * faceClusterIndexer );
+        *ppSides   = new DeviceBuffer( sizeof(u32)*6*faceClusterIndexer );
 
         (*ppBvhTree)->copyFrom( nodes, false );
         (*ppFaces)->copyFrom( faces, false );
         (*ppFaceClusters)->copyFrom( fc, false );
+
+        // Sides of leafs can now be determine as index of every node is known.
+        u32* sides_data = new u32[faceClusterIndexer*6];
+        struct sideStack
+        {
+            u32 node;
+            u32 indices[6];
+        };
+        sideStack sstack[64];
+        sideStack* sst = &sstack[0];
+        sst->node = 0;
+        top=0;
+        for ( auto& sd : sst->indices ) sd = RL_INVALID_INDEX;
+        while ( top>=0 )
+        {
+            sst = &sstack[top--];
+            BvhNode* node = nodes + sst->node;
+            if ( node->isLeaf() )
+            {
+                assert( BVH_GET_INDEX_RIGHT( node->right ) < faceClusterIndexer );
+                u32* pSides = sides_data + BVH_GET_INDEX_RIGHT( node->right )*6;
+                memcpy( pSides, sst->indices, sizeof(u32)*6 );
+            }
+            else
+            {
+                u32 spAxis = BVH_GET_AXIS( node->right );
+                u32 oldSides[6];
+                memcpy( oldSides, sst->indices, sizeof(u32)*6 );
+                // right
+                sst = &sstack[++top];
+                sst->node = BVH_GET_INDEX_RIGHT(node->right);
+                memcpy(sst->indices, oldSides, sizeof(u32)*6);
+                sst->indices[spAxis*2+1] = node->left;
+                // left
+                sst = &sstack[++top];
+                sst->node = node->left;
+                memcpy( sst->indices, oldSides, sizeof(u32)*6 );
+                sst->indices[ spAxis*2 ] = BVH_GET_INDEX_RIGHT( node->right );
+            }
+        }
+        (*ppSides)->copyFrom( sides_data, false );
 
         // statistics
     #if RL_PRINT_STATS
         float nodeSize = (float)sizeof(BvhNode)*nodeIndexer/1024/1024;
         float facesize = (float)sizeof(Face)*faceIndexer/1024/1024;
         float faceClusterSize = (float)sizeof(FaceCluster)*faceClusterIndexer/1024/1024;
+        float sidesSize = (float)sizeof(u32)*6*faceClusterIndexer/1024/1024;
         printf("\nActual allocations on device\n");
         printf("NodeCount %d, size %.3fmb\n", nodeIndexer, nodeSize);
         printf("FaceCount %d, size %.3fmb\n", faceIndexer, facesize);
         printf("FaceClusterCount %d, size %.3fmb\n", faceClusterIndexer, faceClusterSize);
-        printf("Total: %.3fmb\n", (nodeSize+facesize+faceClusterSize));
+        printf("Sidelinks %d, size %.3fmb\n", faceClusterIndexer, sidesSize);
+        printf("Total: %.3fmb\n", (nodeSize+facesize+faceClusterSize+sidesSize));
         showDebugInfo( nodes );
     #endif
 
@@ -219,6 +273,7 @@ namespace Reylax
         delete[] nodes;
         delete[] faces;
         delete[] fc;
+        delete[] sides_data;
 
     #if RL_PRINT_STATS
         printf("\nDELETED intermediate allocations\n\n");
@@ -228,23 +283,35 @@ namespace Reylax
         return ERROR_ALL_FINE;
     }
 
-    void BvhNode::determineBbox(stNode* st, const MeshData** meshData, vec3& bMin, vec3& bMax, vec3& centre)
+    void BvhNode::determineCentre(vector<Face>& faces, const MeshData** meshData, vec3& centre)
     {
-        bMin = vec3(FLT_MAX);
-        bMax = vec3(FLT_MIN);
         centre = vec3(0);
-        for ( auto& f : st->faces )
+        for ( auto& f : faces )
         {
             const vec3* vd  = (const vec3*)(meshData[f.w])->vertexData[VERTEX_DATA_POSITION];
             const vec3 v[3] ={ vd[f.x], vd[f.y], vd[f.z] };
             for ( auto& vi: v )
             {
                 centre += vi;
+            }
+        }
+        centre /= faces.size()*3;
+    }
+
+    void BvhNode::determineBbox(vector<Face>& faces, const MeshData** meshData, vec3& bMin, vec3& bMax)
+    {
+        bMin = vec3(FLT_MAX);
+        bMax = vec3(FLT_MIN);
+        for ( auto& f : faces )
+        {
+            const vec3* vd  = (const vec3*)(meshData[f.w])->vertexData[VERTEX_DATA_POSITION];
+            const vec3 v[3] ={ vd[f.x], vd[f.y], vd[f.z] };
+            for ( auto& vi: v )
+            {
                 bMin = _min<vec3>(bMin, vi);
                 bMax = _max<vec3>(bMax, vi);
             }
         }
-        centre /= (float)st->faces.size()*3;
     }
 
     void BvhNode::showDebugInfo(const BvhNode* nodes)

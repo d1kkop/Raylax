@@ -48,7 +48,7 @@ u32 selectNextBox( const vec3* bounds, const u32* links, ro, rd, rinvd, sign )
 
 	// check if zDist > xDist, note: xDist was updated if yDist was bigger
 	bEval  = zDist > xDist;
-	xDist  = bEval? zDist : xDist;
+//	xDist  = bEval? zDist : xDist;
 	offset = bEval? 4 : offset;
 	side   = bEval? 2 : side;
 

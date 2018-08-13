@@ -6,11 +6,18 @@
 #define RL_INVALID_INDEX ((u32)-1)
 #define RL_VALID_INDEX( idx ) (idx!=RL_INVALID_INDEX)
 
-#define BVH_NUM_FACES_IN_LEAF 32
-#define BVH_ISLEAF( idx ) ((idx>>31)==1)
-#define BVH_GETNUM_TRIANGLES(idx) (idx&0x7FFFFFF)
 #define BVH_MAX_DEPTH 64
+#define BVH_NUM_FACES_IN_LEAF 32
 #define BVH_DBG_INFO 1
+
+#define BVH_ISLEAF( idx ) (((idx)>>31)==1)
+#define BVH_GETNUM_TRIANGLES(idx) ((idx)&0x7FFFFFF)
+#define BVH_GET_INDEX_RIGHT(idx) ((idx)&0x3FFFFFF)
+#define BVH_SET_INDEX_RIGHT(idx, v) ((idx)|=((v)&0x3FFFFFF))
+#define BVH_SET_LEAF_AND_FACES(idx, kFaces) ((idx)=(1<<31)|(kFaces))
+#define BVH_SET_AXIS(idx, axis) ((idx)|=((axis)<<30))
+#define BVH_GET_AXIS(idx) ((idx)>>30)
+
 
 
 namespace Reylax
@@ -24,10 +31,10 @@ namespace Reylax
      };
 
      __align__(4)
-     struct RayBox
+     struct PointBox
      {
-         u32 ray;
-         u32 node;
+         vec3 point;
+         u32 node, ray;
      };
 
      __align__(4)
@@ -60,15 +67,7 @@ namespace Reylax
 
     struct BvhNode
     {
-        // create stack
-        struct stNode
-        {
-            u32 parentIdx, depth;
-            std::vector<Face> faces;
-            vec3 bMin, bMax;
-        };
-
-        vec3 hs, cp;
+        vec3 bMin, bMax;
         u32 left, right;
 
         FDEVICE bool isLeaf() const
@@ -91,10 +90,12 @@ namespace Reylax
 
         static u32 build( const MeshData** meshData, u32 numMeshDatas, 
                           DeviceBuffer** ppBvhTree,
+                          DeviceBuffer** ppSides,
                           DeviceBuffer** ppFaces,
                           DeviceBuffer** ppFaceClusters );
 
-        static void determineBbox(BvhNode::stNode* st, const MeshData** meshData, vec3& bMin, vec3& bMax, vec3& centre);
+        static void determineCentre(std::vector<Face>& faces, const MeshData** meshData, vec3& centre);
+        static void determineBbox(std::vector<Face>& faces, const MeshData** meshData, vec3& bMin, vec3& bMax);
 
         static void showDebugInfo( const BvhNode* nodes );
     };
@@ -182,6 +183,34 @@ namespace Reylax
         float dist  = _max(0.f, ftmin);
         dist = (ftmax >= ftmin ? dist : FLT_MAX);
         return dist;
+    }
+
+    FDEVICE INLINE u32 SelectNextBox(const vec3* bounds, const u32* links, const char* sign, 
+                                     const vec3& p, const vec3& rinvd, float& tOut)
+    {
+        float xDist = (bounds[sign[0]].x - p.x) * rinvd.x;
+        float yDist = (bounds[sign[1]].y - p.y) * rinvd.y;
+        float zDist = (bounds[sign[2]].z - p.z) * rinvd.z;
+
+        // assume xDist being the smallest
+        u32 offset = 0;
+        u32 side   = 0;
+
+        bool bEval;
+
+        // check if yDist > xDist
+        bEval  = yDist < xDist;
+        xDist  = bEval? yDist : xDist;
+        offset = bEval? 2 : 0;
+        side   = bEval? 1 : 0;
+
+        // check if zDist < xDist, note: xDist was updated if yDist was smaller
+        bEval  = zDist < xDist;
+        tOut   = bEval? zDist : xDist;
+        offset = bEval? 4 : offset;
+        side   = bEval? 2 : side;
+
+        return links[offset + sign[side]];
     }
 
     FDEVICE INLINE bool AABBOverlap(const vec3& tMin, const vec3& tMax, const vec3& bMin, const vec3& bMax)
