@@ -1,8 +1,15 @@
 #include "Reylax.h"
 #include "GLinterop.h"
+// SDL
 #include <SDL.h>
+// STL
+#include <cstdio>
+#include <cassert>
 #include <iostream>
 #include <chrono>
+// CDUA
+#include <cuda_runtime.h>
+// GLM
 #include "glm/common.hpp"
 #include "glm/geometric.hpp"
 #include "glm/vec3.hpp"
@@ -32,6 +39,9 @@ using namespace chrono;
 
 double time() { return static_cast<double>(duration_cast<duration<double, milli>>(high_resolution_clock::now().time_since_epoch()).count()); }
 bool loadModel(const std::string& name, vector<IMesh*>& meshes);
+
+extern __device__ u32* buffer;
+extern __device__ void TraceCallback(u32 globalId, u32 localId, const HitResult& hit, const MeshData* const* meshPtrs, float* rayOris, float* rayDirs);
 
 
 struct Profiler
@@ -63,7 +73,7 @@ struct Program
         loopDone=false;
         camPan=0;
         camPitch=0;
-        camPos = vec3(0,0,-2);
+        camPos = vec3(0,0,-2.5f);
     }
 
     void update(Profiler& pr)
@@ -115,7 +125,7 @@ struct Program
         mat4 yaw   = glm::rotate(camPan, vec3(0.f, 1.f, 0.f));
         mat4 pitch = glm::rotate(camPitch, vec3(1.f, 0.f, 0.f));
         mat3 orient = (yaw * pitch);
-        camPos += orient*move;
+   //     camPos += orient*move;
         if ( kds[4] ) camPos.y += speed;
         if ( kds[5] ) camPos.y -= speed;
     }
@@ -165,8 +175,9 @@ struct Program
             {
                 mat4 yaw   = rotate(camPan, vec3(0.f, 1.f, 0.f));
                 mat4 pitch = rotate(camPitch, vec3(1.f, 0.f, 0.f));
-                mat3 orient = (yaw * pitch);
-                err = tracer->trace((const float*)&camPos, (const float*)&orient, scene, query, &result, 1);
+          //      mat3 orient = (yaw * pitch);
+                mat3 orient(1);
+                err = tracer->trace((const float*)&camPos, (const float*)&orient, scene, query, &result, 1, TraceCallback);
                 assert(err==0);
             }
             syncDevice();
@@ -182,7 +193,7 @@ struct Program
 };
 
 
-// Setup a camera directions in local space
+// Setup camera directions in local space
 vec3* createPrimaryRays(u32 width, u32 height, float left, float right, float top, float bottom, float zoom)
 {
     assert(width*height!=0);
@@ -208,8 +219,34 @@ vec3* createPrimaryRays(u32 width, u32 height, float left, float right, float to
 }
 
 
+template <class T> T _min(T a, T b) { return a<b?a:b; }
+template <class T> T _max(T a, T b) { return a>b?a:b; }
+template <> vec3 _min(vec3 a, vec3 b) { return vec3(_min<float>(a.x, b.x), _min<float>(a.y, b.y), _min<float>(a.z, b.z)); }
+template <> vec3 _max(vec3 a, vec3 b) { return vec3(_max<float>(a.x, b.x), _max<float>(a.y, b.y), _max<float>(a.z, b.z)); }
+
+float temp_BoxRayIntersect(const vec3& bMin, const vec3& bMax, const vec3& orig, const vec3& invDir)
+{
+    vec3 tMin  = (bMin - orig) * invDir;
+    vec3 tMax  = (bMax - orig) * invDir;
+    vec3 oMin  = _min(tMin, tMax);
+    vec3 oMax  = _max(tMin, tMax);
+    float dmin = _max(oMin.x, _max(oMin.y, oMin.z));
+    float dmax = _min(oMax.x, _min(oMax.y, oMax.z));
+    float dist = _max(0.f, dmin);
+    return (dmax >= dmin ? dist : FLT_MAX);
+}
+
 int main(int argc, char** argv)
 {
+    vec3 bMin(-1);
+    vec3 bMax(1);
+    vec3 o(1.001f,0.2f,1.0f-0.01f);
+    vec3 d(-1.001f,0,1);
+    d = normalize(d);
+    vec3 invd(1.f/d.x, 1.f/d.y, 1.f/d.z);
+
+    float kDist = temp_BoxRayIntersect( bMin, bMax, o, invd );
+
     const char* winTitle = "ReylaxTest";
     int width  = 1920;
     int height = 1080;
@@ -249,8 +286,8 @@ int main(int argc, char** argv)
     {
         cout << "Failed to load f16" << endl;
     }
-    scene = IGpuStaticScene::create(meshes.data(), (u32)meshes.size());
-    assert(scene);
+ //   scene = IGpuStaticScene::create(meshes.data(), (u32)meshes.size());
+ //   assert(scene);
     for ( auto& m : meshes ) delete m;
 
     // All primary rays only have a unique direction, set this up.

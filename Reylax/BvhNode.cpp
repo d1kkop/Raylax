@@ -14,9 +14,9 @@ namespace Reylax
 
     u32 BvhNode::build(const MeshData** meshData, u32 numMeshDatas,
                        DeviceBuffer** ppBvhTree,
-                       DeviceBuffer** ppSides,
                        DeviceBuffer** ppFaces,
-                       DeviceBuffer** ppFaceClusters)
+                       DeviceBuffer** ppFaceClusters,
+                       DeviceBuffer** ppSides)
     {
         if ( !meshData || numMeshDatas == 0 || !ppBvhTree || !ppFaces || !ppFaceClusters || !ppSides )
         {
@@ -91,7 +91,7 @@ namespace Reylax
             BvhNode*node = nodes + nodeIndexer++;
             node->bMin   = st->bMin;
             node->bMax   = st->bMax;
-            node->left   = 0;
+            node->left   = 0;   // 0 is also useful to detect as invalid because only the first node can have 0, all others must be higher
             node->right  = 0;
 
             // If cur stack node has valid parent index, we can now efficiently assign index children of parent
@@ -99,11 +99,11 @@ namespace Reylax
             if ( RL_VALID_INDEX(st->parentIdx) )
             {
                 BvhNode* parent = nodes + st->parentIdx;
-                if ( !RL_VALID_INDEX(parent->left) ) parent->left = nodeIndexer-1;
+                if ( BVH_GET_INDEX(parent->left)==0 ) parent->left = nodeIndexer-1;
                 else
                 {
-                    assert(!RL_VALID_INDEX(BVH_GET_INDEX_RIGHT(parent->right)));
-                    BVH_SET_INDEX_RIGHT(parent->right, nodeIndexer-1);
+                    assert( BVH_GET_INDEX(parent->right)==0 );
+                    BVH_SET_INDEX(parent->right, nodeIndexer-1);
                 }
             }
 
@@ -123,10 +123,10 @@ namespace Reylax
                 assert( faceClusterIndexer < numFacesClusters );
                 u32 numFaces = _min( (u32)st->faces.size(), (u32)BVH_NUM_FACES_IN_LEAF );
                 BVH_SET_LEAF_AND_FACES( node->left, numFaces );
-                BVH_SET_INDEX_RIGHT( node->right, faceClusterIndexer );
-                faceClusterIndexer++;
-                FaceCluster* cluster = fc + BVH_GET_INDEX_RIGHT( node->right );
+                node->right = faceClusterIndexer++;
+                FaceCluster* cluster = fc + node->right;
                 cluster->numFaces    = numFaces;
+                assert( node->numFaces()==cluster->numFaces );
                 assert( BVH_GETNUM_TRIANGLES(node->left)==cluster->numFaces );
                 for ( u32 i=0; i<cluster->numFaces; ++i )
                 {
@@ -150,12 +150,19 @@ namespace Reylax
             #endif
                 BVH_SET_AXIS( node->right, splitAxis );
 
-                vec3 centre;
-                determineCentre( st->faces, meshData, centre );
+                // NOTE: Cannot take centre as 'midpoint' as it might be outside the bbox due to triangles overlapping the boundaries.
+            //    vec3 centre;
+            //    determineCentre( st->faces, meshData, centre );
+                float s = (node->bMax[splitAxis]+node->bMin[splitAxis])*.5f;// centre[splitAxis];
+            //    float lowerBound = node->bMin[splitAxis] + hs[splitAxis] * 0.1f;
+            //    float upperBound = node->bMax[splitAxis] - hs[splitAxis] * 0.1f;
+            //    s = _max( s, lowerBound );
+            //    s = _min( s, upperBound );
+
                 vec3 lMax = st->bMax;
                 vec3 rMin = st->bMin;
-                lMax[splitAxis] = centre[splitAxis];
-                rMin[splitAxis] = centre[splitAxis];
+                lMax[splitAxis] = s;
+                rMin[splitAxis] = s;
 
                 vec3 cpL = (st->bMin+lMax)*.5f;
                 vec3 hsL = (lMax-st->bMin)*.5f;
@@ -228,8 +235,8 @@ namespace Reylax
             BvhNode* node = nodes + sst->node;
             if ( node->isLeaf() )
             {
-                assert( BVH_GET_INDEX_RIGHT( node->right ) < faceClusterIndexer );
-                u32* pSides = sides_data + BVH_GET_INDEX_RIGHT( node->right )*6;
+                assert( node->right < faceClusterIndexer );
+                u32* pSides = sides_data + node->right*6;
                 memcpy( pSides, sst->indices, sizeof(u32)*6 );
             }
             else
@@ -239,14 +246,14 @@ namespace Reylax
                 memcpy( oldSides, sst->indices, sizeof(u32)*6 );
                 // right
                 sst = &sstack[++top];
-                sst->node = BVH_GET_INDEX_RIGHT(node->right);
-                memcpy(sst->indices, oldSides, sizeof(u32)*6);
+                sst->node = BVH_GET_INDEX(node->right);
+                memcpy( sst->indices, oldSides, sizeof(u32)*6 );
                 sst->indices[spAxis*2+1] = node->left;
                 // left
                 sst = &sstack[++top];
-                sst->node = node->left;
+                sst->node = BVH_GET_INDEX(node->left);
                 memcpy( sst->indices, oldSides, sizeof(u32)*6 );
-                sst->indices[ spAxis*2 ] = BVH_GET_INDEX_RIGHT( node->right );
+                sst->indices[ spAxis*2 ] = BVH_GET_INDEX( node->right ); // spAxis also stored in right
             }
         }
         (*ppSides)->copyFrom( sides_data, false );
@@ -354,10 +361,10 @@ namespace Reylax
             {
                 u32 depth = st->depth;
                 st = &stack[++top];
-                st->node  = node->left;
+                st->node  = BVH_GET_INDEX( node->left );
                 st->depth = depth+1;
                 st = &stack[++top];
-                st->node  = node->right;
+                st->node  = BVH_GET_INDEX( node->right );
                 st->depth = depth+1;
             }
         }

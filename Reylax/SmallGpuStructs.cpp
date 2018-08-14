@@ -78,6 +78,7 @@ namespace Reylax
                 {
                     u32 numComponents  = m->d.vertexDataSizes[i];
                     gm->vertexDatas[i] = new DeviceBuffer(sizeof(float)*numComponents*m->d.numVertices);
+                    gm->vertexDatas[i]->copyFrom( m->d.vertexData[i], false );
                     COPY_PTR_TO_DEVICE_ASYNC(gm->d, gm->vertexDatas[i], MeshData, vertexData[i]);
                 }
             }
@@ -90,9 +91,9 @@ namespace Reylax
         {
             meshPtrs[i] = gpuScene->m_gpuMeshes[i].d->ptr<MeshData>();
         }
-        gpuScene->m_meshDataPtrs->copyFrom(meshPtrs, true);
+        gpuScene->m_meshDataPtrs->copyFrom(meshPtrs, false);
+        syncDevice(); // Await copies to be finished before deleting host memory
         delete [] meshPtrs;
-
         return gpuScene;
     }
 

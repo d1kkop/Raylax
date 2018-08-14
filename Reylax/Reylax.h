@@ -67,7 +67,9 @@ namespace Reylax
         RL_DLL static ITracer* create();
         virtual ~ITracer() = default;
         virtual u32 trace( const float* eye3, const float* orient3x3,
-                           const IGpuStaticScene* scene, const ITraceQuery* query, const ITraceResult* const* results, u32 numResults ) = 0;
+                           const IGpuStaticScene* scene, const ITraceQuery* query,
+                           const ITraceResult* const* results, u32 numResults,
+                           HitCallback cb ) = 0;
     };
 
 

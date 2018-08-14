@@ -1,5 +1,6 @@
 #pragma once
 
+
 namespace Reylax
 {
     using i32 = __int32;
@@ -53,5 +54,5 @@ namespace Reylax
         float rd[3];
     };
 
-    using HitCallback = void (*)(const HitResult*, const MeshData*, void**);
+    using HitCallback = void (*)(u32 globalId, u32 localId, const HitResult& hit, const MeshData* const* meshPtrs, float* rayOris3, float* rayDir3);
 }

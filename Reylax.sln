@@ -5,12 +5,9 @@ VisualStudioVersion = 15.0.27703.2035
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Reylax", "Reylax\Reylax.vcxproj", "{39E77312-CE00-4695-B392-B0110E6EB695}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestProject", "TestProject\TestProject.vcxproj", "{DAAA9156-79BF-4B87-A805-66FFD2C28251}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Demo", "Demo\Demo.vcxproj", "{D20A2C7F-4AF2-4884-B8DD-F72CE7A76F73}"
 EndProject
 Global
-	GlobalSection(Performance) = preSolution
-		HasPerformanceSessions = true
-	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
 		Debug|x86 = Debug|x86
@@ -29,23 +26,24 @@ Global
 		{39E77312-CE00-4695-B392-B0110E6EB695}.Release|x64.ActiveCfg = Release|x64
 		{39E77312-CE00-4695-B392-B0110E6EB695}.Release|x64.Build.0 = Release|x64
 		{39E77312-CE00-4695-B392-B0110E6EB695}.Release|x86.ActiveCfg = Release|x64
-		{DAAA9156-79BF-4B87-A805-66FFD2C28251}.Debug|x64.ActiveCfg = Debug|x64
-		{DAAA9156-79BF-4B87-A805-66FFD2C28251}.Debug|x64.Build.0 = Debug|x64
-		{DAAA9156-79BF-4B87-A805-66FFD2C28251}.Debug|x86.ActiveCfg = Debug|Win32
-		{DAAA9156-79BF-4B87-A805-66FFD2C28251}.Debug|x86.Build.0 = Debug|Win32
-		{DAAA9156-79BF-4B87-A805-66FFD2C28251}.Profile|x64.ActiveCfg = Profile|x64
-		{DAAA9156-79BF-4B87-A805-66FFD2C28251}.Profile|x64.Build.0 = Profile|x64
-		{DAAA9156-79BF-4B87-A805-66FFD2C28251}.Profile|x86.ActiveCfg = Profile|Win32
-		{DAAA9156-79BF-4B87-A805-66FFD2C28251}.Profile|x86.Build.0 = Profile|Win32
-		{DAAA9156-79BF-4B87-A805-66FFD2C28251}.Release|x64.ActiveCfg = Release|x64
-		{DAAA9156-79BF-4B87-A805-66FFD2C28251}.Release|x64.Build.0 = Release|x64
-		{DAAA9156-79BF-4B87-A805-66FFD2C28251}.Release|x86.ActiveCfg = Release|Win32
-		{DAAA9156-79BF-4B87-A805-66FFD2C28251}.Release|x86.Build.0 = Release|Win32
+		{D20A2C7F-4AF2-4884-B8DD-F72CE7A76F73}.Debug|x64.ActiveCfg = Debug|x64
+		{D20A2C7F-4AF2-4884-B8DD-F72CE7A76F73}.Debug|x64.Build.0 = Debug|x64
+		{D20A2C7F-4AF2-4884-B8DD-F72CE7A76F73}.Debug|x86.ActiveCfg = Debug|x64
+		{D20A2C7F-4AF2-4884-B8DD-F72CE7A76F73}.Profile|x64.ActiveCfg = Release|x64
+		{D20A2C7F-4AF2-4884-B8DD-F72CE7A76F73}.Profile|x64.Build.0 = Release|x64
+		{D20A2C7F-4AF2-4884-B8DD-F72CE7A76F73}.Profile|x86.ActiveCfg = Release|x64
+		{D20A2C7F-4AF2-4884-B8DD-F72CE7A76F73}.Profile|x86.Build.0 = Release|x64
+		{D20A2C7F-4AF2-4884-B8DD-F72CE7A76F73}.Release|x64.ActiveCfg = Release|x64
+		{D20A2C7F-4AF2-4884-B8DD-F72CE7A76F73}.Release|x64.Build.0 = Release|x64
+		{D20A2C7F-4AF2-4884-B8DD-F72CE7A76F73}.Release|x86.ActiveCfg = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {B84E04E3-5B2E-4B98-9CA9-2BD50FF26062}
+	EndGlobalSection
+	GlobalSection(Performance) = preSolution
+		HasPerformanceSessions = true
 	EndGlobalSection
 EndGlobal

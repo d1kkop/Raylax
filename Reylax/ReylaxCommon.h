@@ -12,8 +12,8 @@
 
 #define BVH_ISLEAF( idx ) (((idx)>>31)==1)
 #define BVH_GETNUM_TRIANGLES(idx) ((idx)&0x7FFFFFF)
-#define BVH_GET_INDEX_RIGHT(idx) ((idx)&0x3FFFFFF)
-#define BVH_SET_INDEX_RIGHT(idx, v) ((idx)|=((v)&0x3FFFFFF))
+#define BVH_GET_INDEX(idx) ((idx)&0x3FFFFFF)
+#define BVH_SET_INDEX(idx, v) ((idx)|=((v)&0x3FFFFFF))
 #define BVH_SET_LEAF_AND_FACES(idx, kFaces) ((idx)=(1<<31)|(kFaces))
 #define BVH_SET_AXIS(idx, axis) ((idx)|=((axis)<<30))
 #define BVH_GET_AXIS(idx) ((idx)>>30)
@@ -27,7 +27,8 @@ namespace Reylax
      __align__(4)
      struct Ray
      {
-         vec3 o, d;
+         vec3 o, d, invd;
+         char sign[3];
      };
 
      __align__(4)
@@ -60,7 +61,7 @@ namespace Reylax
         u32 numFaces;
         FDEVICE INLINE u32 getFace(u32 idx) const
         {
-            assert(idx < BVH_NUM_FACES_IN_LEAF);
+            assert(idx < BVH_NUM_FACES_IN_LEAF && idx < numFaces);
             return faces[idx];
         }
     };
@@ -84,15 +85,19 @@ namespace Reylax
         FDEVICE u32 getFace(const FaceCluster* faceClusters, u32 idx) const
         {
             assert(isLeaf());
-            const FaceCluster* fc = faceClusters + right;
+            const FaceCluster* fc = faceClusters + right; // No split axis stored in right in case of leaf. Safe to to use without GET_INDEX.
+        #if _DEBUG
+            u32 tnumFaces=numFaces();
+            assert(tnumFaces==fc->numFaces);
+        #endif
             return fc->getFace(idx);
         }
 
         static u32 build( const MeshData** meshData, u32 numMeshDatas, 
                           DeviceBuffer** ppBvhTree,
-                          DeviceBuffer** ppSides,
                           DeviceBuffer** ppFaces,
-                          DeviceBuffer** ppFaceClusters );
+                          DeviceBuffer** ppFaceClusters,
+                          DeviceBuffer** ppSides );
 
         static void determineCentre(std::vector<Face>& faces, const MeshData** meshData, vec3& centre);
         static void determineBbox(std::vector<Face>& faces, const MeshData** meshData, vec3& bMin, vec3& bMax);
@@ -126,6 +131,20 @@ namespace Reylax
             if ( newTop > m_max ) printf("m_top = %d, _max = %d\n", newTop, m_max);
             return newTop <= m_max;
         }
+    };
+
+    // Tracer context
+    struct TracerContext
+    {
+        vec3 eye;
+        vec3 orient;
+        Store<PointBox> pbQueue[2];
+        Store<RayLeaf>  leafQueue[2];
+        const BvhNode* bvhNodes;
+        const Face* faces;
+        const FaceCluster* faceClusters;
+        const u32* sides;
+        const MeshData* const* meshData;
     };
 
 
@@ -173,16 +192,14 @@ namespace Reylax
     // https://tavianator.com/fast-branchless-raybounding-box-intersections/
     FDEVICE INLINE float BoxRayIntersect(const vec3& bMin, const vec3& bMax, const vec3& orig, const vec3& invDir)
     {
-        vec3 tMin   = (bMin - orig) * invDir;
-        vec3 tMax   = (bMax - orig) * invDir;
-        vec3 tMax2  = _max(tMin, tMax);
-        float ftmax = _min(tMax2.x, _min(tMax2.y, tMax2.z));
-        if ( ftmax < 0.f ) return FLT_MAX;
-        vec3 tMin2  = _min(tMin, tMax);
-        float ftmin = _max(tMin2.x, _max(tMin2.y, tMin2.z));
-        float dist  = _max(0.f, ftmin);
-        dist = (ftmax >= ftmin ? dist : FLT_MAX);
-        return dist;
+        vec3 tMin  = (bMin - orig) * invDir;
+        vec3 tMax  = (bMax - orig) * invDir;
+        vec3 oMin  = _min(tMin, tMax);
+        vec3 oMax  = _max(tMin, tMax);
+        float dmin = _max(oMin.x,_max(oMin.y, oMin.z));
+        float dmax = _min(oMax.x,_min(oMax.y, oMax.z));
+        float dist = _max(0.f, dmin);
+        return (dmax >= dmin ? dist : FLT_MAX);
     }
 
     FDEVICE INLINE u32 SelectNextBox(const vec3* bounds, const u32* links, const char* sign, 

@@ -7,6 +7,13 @@ using namespace std;
 
 namespace Reylax
 {
+    GLOBAL void HitCallbackKernel(u32 numRays,
+                                  u32 tileOffset,
+                                  const HitResult* hitResults,
+                                  const MeshData* const* meshData,
+                                  float* rayOris, float* rayDirs,
+                                  HitCallback cb);
+
     GLOBAL void TileKernel(u32 numRays,
                            vec3 eye,
                            mat3 orient,
@@ -90,22 +97,23 @@ namespace Reylax
 
     u32 Tracer::trace(const float* eye3, const float* orient3x3,
                       const IGpuStaticScene* scene, const ITraceQuery* query, 
-                      const ITraceResult* const* results, u32 numResults)
+                      const ITraceResult* const* results, u32 numResults,
+                      HitCallback hitCallback)
     {
         if ( !eye3 || !orient3x3 || !scene || !query || numResults==0 || results==nullptr || numResults > RL_RAY_ITERATIONS )
         {
             return ERROR_INVALID_PARAMETER;
         }
 
-        auto trq = static_cast<const TraceQuery*>(query);
-        auto scn = static_cast<const GpuStaticScene*>(scene);
-
         HitResult* hitResults[RL_RAY_ITERATIONS];
         for ( u32 i=0; i<numResults; ++i )
         {
             if ( !results[i] ) return ERROR_INVALID_PARAMETER;
-            hitResults[i] = static_cast<const TraceResult*>( results[i] )->m_result->ptr<HitResult>();
+            hitResults[i] = static_cast<const TraceResult*>(results[i])->m_result->ptr<HitResult>();
         }
+
+        auto trq = static_cast<const TraceQuery*>(query);
+        auto scn = static_cast<const GpuStaticScene*>(scene);
 
         vec3 eye                        = *(vec3*)eye3;
         mat3 orient                     = *(mat3*)orient3x3;
@@ -120,6 +128,12 @@ namespace Reylax
         const u32* sides                = scn->m_sides->ptr<const u32>();
         MeshData** meshData             = scn->m_meshDataPtrs->ptr<MeshData*>();
 
+        // TEST TODO
+        dim3 blocks  ((trq->m_numRays + 256-1)/256);
+        dim3 threads (256);
+        RL_KERNEL_CALL(256, blocks, threads, HitCallbackKernel, trq->m_numRays, 0, hitResults[0], meshData, (float*) rayOris, (float*) rayDirs, hitCallback);
+        return 0;
+
         u32 totalRays = trq->m_numRays;
         m_profiler.beginProfile();
 
@@ -127,7 +141,8 @@ namespace Reylax
         u32 kTile=0;
         while ( totalRays > 0 )
         {
-            u32 numRaysThisTile = _min(m_numRaysPerTile, totalRays);
+            u32 numRaysThisTile = totalRays;
+            if ( m_numRaysPerTile < numRaysThisTile ) numRaysThisTile = m_numRaysPerTile;
             m_profiler.start();
 
             RL_KERNEL_CALL(1, 1, 1, TileKernel,
@@ -141,8 +156,8 @@ namespace Reylax
             m_profiler.stop("Tile " + to_string(kTile++));
             totalRays -= numRaysThisTile;
         }
-
         m_profiler.endProfile("Trace");
+  
 
         return ERROR_ALL_FINE;
     }
