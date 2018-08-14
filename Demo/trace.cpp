@@ -1,29 +1,38 @@
-#include "Reylax.h"
-// STL
-#include <cstdio>
-#include <cassert>
-#include <iostream>
-#include <chrono>
-// CDUA
-#define CUDA_VERSION 9020
-#include <cuda_runtime.h>
-// GLM
-#include "glm/common.hpp"
-#include "glm/geometric.hpp"
-#include "glm/vec3.hpp"
-#include "glm/vec4.hpp"
-#include "glm/mat3x3.hpp"
-#include "glm/mat4x4.hpp"
-#define GLM_ENABLE_EXPERIMENTAL
-#include "glm/gtx/transform.hpp"
-#include "glm/gtx/rotate_vector.hpp"
+#include "main.h"
 using namespace std;
 using namespace glm;
 using namespace Reylax;
 using namespace chrono;
 
-__device__ u32* buffer;
-__device__ void TraceCallback(u32 globalId, u32 localId, const HitResult& hit, const MeshData* const* meshPtrs, float* rayOris, float* rayDirs)
+
+// Implemented by Reylax
+
+
+__align__(8)
+struct TraceData
 {
-    buffer[ globalId ] = 200<<8;
+    vec3 eye;
+    mat3 orient;
+    vec3* rayDirs;
+    u32*  pixels;
+};
+
+HOST_OR_DEVICE TraceData TD;
+HOST_OR_DEVICE QueueRayFptr QueueRayFunc;
+
+
+HOST_OR_DEVICE void FirstRays(u32 globalId, u32 localId)
+{
+    u32 id   = globalId + localId;
+    vec3 dir = TD.orient * TD.rayDirs[id];
+    vec3 ori = TD.eye;
+    QueueRayFunc( localId, &ori.x, &dir.x ); 
+}
+
+HOST_OR_DEVICE void TraceCallback(u32 globalId, u32 localId, u32 depth,
+                                  const HitResult& hit,
+                                  const MeshData* const* meshPtrs, 
+                                  const float* ori3, const float* dir3)
+{
+    TD.pixels[ globalId ] = 200<<8;
 }

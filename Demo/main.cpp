@@ -1,24 +1,4 @@
-#include "Reylax.h"
-#include "GLinterop.h"
-// SDL
-#include <SDL.h>
-// STL
-#include <cstdio>
-#include <cassert>
-#include <iostream>
-#include <chrono>
-// CDUA
-#include <cuda_runtime.h>
-// GLM
-#include "glm/common.hpp"
-#include "glm/geometric.hpp"
-#include "glm/vec3.hpp"
-#include "glm/vec4.hpp"
-#include "glm/mat3x3.hpp"
-#include "glm/mat4x4.hpp"
-#define GLM_ENABLE_EXPERIMENTAL
-#include "glm/gtx/transform.hpp"
-#include "glm/gtx/rotate_vector.hpp"
+#include "main.h"
 using namespace std;
 using namespace glm;
 using namespace Reylax;
@@ -40,8 +20,10 @@ using namespace chrono;
 double time() { return static_cast<double>(duration_cast<duration<double, milli>>(high_resolution_clock::now().time_since_epoch()).count()); }
 bool loadModel(const std::string& name, vector<IMesh*>& meshes);
 
-extern __device__ u32* buffer;
-extern __device__ void TraceCallback(u32 globalId, u32 localId, const HitResult& hit, const MeshData* const* meshPtrs, float* rayOris, float* rayDirs);
+extern HOST_OR_DEVICE u32* buffer;
+extern HOST_OR_DEVICE QueueRayFptr QueueRayFunc;
+extern HOST_OR_DEVICE void FirstRays(u32 globalId, u32 localId);
+extern HOST_OR_DEVICE void TraceCallback(u32 globalId, u32 localId, u32 depth, const HitResult& hit, const MeshData* const* meshPtrs, const float* ori3, const float* dir3);
 
 
 struct Profiler
@@ -130,10 +112,9 @@ struct Program
         if ( kds[5] ) camPos.y -= speed;
     }
 
-    void render(IRenderTarget* rt, 
+    void render(u32 numRays, 
+                IRenderTarget* rt,
                 IGpuStaticScene* scene,
-                ITraceQuery* query,
-                ITraceResult* result,
                 ITracer* tracer,
                 GLTextureBufferRenderer& glRenderer,
                 GLTextureBufferObject& glTbo,
@@ -177,7 +158,7 @@ struct Program
                 mat4 pitch = rotate(camPitch, vec3(1.f, 0.f, 0.f));
           //      mat3 orient = (yaw * pitch);
                 mat3 orient(1);
-                err = tracer->trace((const float*)&camPos, (const float*)&orient, scene, query, &result, 1, TraceCallback);
+                err = tracer->trace( numRays, scene, FirstRays, TraceCallback );
                 assert(err==0);
             }
             syncDevice();
@@ -286,8 +267,8 @@ int main(int argc, char** argv)
     {
         cout << "Failed to load f16" << endl;
     }
- //   scene = IGpuStaticScene::create(meshes.data(), (u32)meshes.size());
- //   assert(scene);
+    scene = IGpuStaticScene::create(meshes.data(), (u32)meshes.size());
+    assert(scene);
     for ( auto& m : meshes ) delete m;
 
     // All primary rays only have a unique direction, set this up.
@@ -302,6 +283,7 @@ int main(int argc, char** argv)
 
     // Create the actual tracer
     tracer = ITracer::create();
+    setSymbolPtrAsync( QueueRayFunc, tracer->getQueueRayAddress() );
 
     // Update loop
     Program p;
@@ -312,7 +294,7 @@ int main(int argc, char** argv)
     while ( !p.loopDone )
     {
         p.update( pr );
-        p.render( rt, scene, query, result, tracer, *glRenderer, *glRt, pr );
+        p.render( width*height, rt, scene, tracer, *glRenderer, *glRt, pr );
         SDL_GL_SwapWindow(sdl_window);
         if ( time() - tBegin > 1000.0 )
         {

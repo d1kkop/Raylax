@@ -9,6 +9,7 @@
     <ClInclude Include="GLinterop.h">
       <Filter>support</Filter>
     </ClInclude>
+    <ClInclude Include="main.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="LoadModel.cpp">

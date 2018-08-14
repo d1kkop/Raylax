@@ -7,38 +7,25 @@ using namespace std;
 
 namespace Reylax
 {
-    GLOBAL void HitCallbackKernel(u32 numRays,
-                                  u32 tileOffset,
-                                  const HitResult* hitResults,
-                                  const MeshData* const* meshData,
-                                  float* rayOris, float* rayDirs,
-                                  HitCallback cb);
+    GLOBAL void TileKernel(u32 numRays);
+    DEVICE void QueueRay(u32 localId, const float* ori, const float* dir);
 
-    GLOBAL void TileKernel(u32 numRays,
-                           vec3 eye,
-                           mat3 orient,
-                           Store<PointBox>** pbQueues,
-                           Store<RayLeaf>** leafQueues,
-                           char* raySigns,
-                           vec3* rayOris,
-                           const vec3* rayDirs,
-                           const BvhNode* bvhNodes,
-                           const Face* faces,
-                           const FaceCluster* faceClusters,
-                           const u32* sides,
-                           const MeshData* const* meshData,
-                           HitResult* hitResults);
+    extern DEVICE TracerContext ct;
 
 
-    ITracer* ITracer::create()
+    ITracer* ITracer::create(u32 numRaysPerTile, u32 maxRecursionDepth)
     {
-        return new Tracer();
+        u32 queueLength = numRaysPerTile*maxRecursionDepth;
+        return new Tracer( queueLength, queueLength, queueLength, numRaysPerTile);
     }
 
-    Tracer::Tracer(u32 numPointBoxQueries, u32 numLeafQueries, u32 numRaysPerTile):
+    Tracer::Tracer(u32 numPointBoxQueries, u32 numLeafQueries, u32 numRayQueries, u32 numRaysPerTile):
         m_numPointBoxQueries(numPointBoxQueries),
         m_numRayLeafQueries(numLeafQueries),
-        m_numRaysPerTile(numRaysPerTile)
+        m_numRayQueries(numRayQueries),
+        m_numRaysPerTile(numRaysPerTile),
+        m_rayQueue(nullptr),
+        m_rayBuffer(nullptr)
     {
         for ( u32 i=0; i<2; i++ )
         {
@@ -63,6 +50,11 @@ namespace Reylax
             printf("RayLeafQueries %d, count %d, size %.3fmb\n", i, numLeafQueries, (float)m_leafBuffer[i]->size()/1024/1024);
         #endif
         }
+        m_rayQueue  = new DeviceBuffer(sizeof(Store<Ray>));
+        m_rayBuffer = new DeviceBuffer(numRayQueries*sizeof(Ray));
+    #if RL_PRINT_STATS
+        printf("RayQueries, count %d, size %.3fmb\n", numRayQueries, (float)m_rayBuffer->size()/1024/1024);
+    #endif
 
         // Assign device buffers to queue elements ptr
         for ( u32 i=0; i<2; i++ )
@@ -72,6 +64,14 @@ namespace Reylax
             COPY_PTR_TO_DEVICE_ASYNC(m_leafQueue[i], m_leafBuffer[i], Store<RayLeaf>, m_elements);
             COPY_VALUE_TO_DEVICE_ASYNC(m_leafQueue[i], numLeafQueries, Store<RayLeaf>, m_max, sizeof(u32));
         }
+        COPY_PTR_TO_DEVICE_ASYNC(m_rayQueue, m_rayBuffer, Store<Ray>, m_elements);
+        COPY_VALUE_TO_DEVICE_ASYNC(m_rayQueue, numRayQueries, Store<Ray>, m_max, sizeof(u32));
+
+        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.rayPayload, m_rayQueue->ptr<void>(), sizeof(void*), 0 ) );
+        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.pbQueues[0], m_pointBoxBuffer[0]->ptr<void>(), sizeof(void*), 0 ) );
+        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.pbQueues[1], m_pointBoxBuffer[1]->ptr<void>(), sizeof(void*), 0 ) );
+        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.leafQueues[0], m_leafQueue[0]->ptr<void>(), sizeof(void*), 0 ) );
+        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.leafQueues[1], m_leafQueue[1]->ptr<void>(), sizeof(void*), 0 ) );
 
         u64 totalMemory = 0;
         for ( u32 i=0; i<2; i++ )
@@ -82,6 +82,9 @@ namespace Reylax
         
         printf("Total: %.3fmb\n", (float)totalMemory/1024/1024);
         printf("\n--- End Tracer allocations ---\n\n");
+
+        // Ensure all memory transfers are done
+        syncDevice();
     }
 
     Tracer::~Tracer()
@@ -93,73 +96,57 @@ namespace Reylax
             delete m_pointBoxQueue[i];
             delete m_pointBoxBuffer[i];
         }
+        delete m_rayQueue;
+        delete m_rayBuffer;
     }
 
-    u32 Tracer::trace(const float* eye3, const float* orient3x3,
-                      const IGpuStaticScene* scene, const ITraceQuery* query, 
-                      const ITraceResult* const* results, u32 numResults,
-                      HitCallback hitCallback)
+    u32 Tracer::trace(u32 numRays, const IGpuStaticScene* scene, RaySetupFptr setupCb, HitResultFptr hitCb)
     {
-        if ( !eye3 || !orient3x3 || !scene || !query || numResults==0 || results==nullptr || numResults > RL_RAY_ITERATIONS )
+        if ( !scene || !setupCb || !hitCb )
         {
             return ERROR_INVALID_PARAMETER;
         }
 
-        HitResult* hitResults[RL_RAY_ITERATIONS];
-        for ( u32 i=0; i<numResults; ++i )
-        {
-            if ( !results[i] ) return ERROR_INVALID_PARAMETER;
-            hitResults[i] = static_cast<const TraceResult*>(results[i])->m_result->ptr<HitResult>();
-        }
-
-        auto trq = static_cast<const TraceQuery*>(query);
         auto scn = static_cast<const GpuStaticScene*>(scene);
 
-        vec3 eye                        = *(vec3*)eye3;
-        mat3 orient                     = *(mat3*)orient3x3;
-        Store<PointBox>* pbQueues[]     = { m_pointBoxQueue[0]->ptr<Store<PointBox>>(), m_pointBoxQueue[1]->ptr<Store<PointBox>>() };
-        Store<RayLeaf>* leafQueues[]    = { m_leafQueue[0]->ptr<Store<RayLeaf>>(), m_leafQueue[1]->ptr<Store<RayLeaf>>() };
-        char* raySigns                  = trq->m_signs->ptr<char>();    // not const, because changes each time ray dir changes
-        vec3* rayOris                   = trq->m_oris->ptr<vec3>();     // Not const, because first origin is derived from eye
-        const vec3* rayDirs             = trq->m_dirs->ptr<const vec3>();
         const BvhNode* bvhNodes         = scn->m_bvhTree->ptr<const BvhNode>();
         const Face* faces               = scn->m_faces->ptr<const Face>();
         const FaceCluster* faceClusters = scn->m_faceClusters->ptr<const FaceCluster>();
         const u32* sides                = scn->m_sides->ptr<const u32>();
         MeshData** meshData             = scn->m_meshDataPtrs->ptr<MeshData*>();
 
-        // TEST TODO
-        dim3 blocks  ((trq->m_numRays + 256-1)/256);
-        dim3 threads (256);
-        RL_KERNEL_CALL(256, blocks, threads, HitCallbackKernel, trq->m_numRays, 0, hitResults[0], meshData, (float*) rayOris, (float*) rayDirs, hitCallback);
-        return 0;
+        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.bMin, &scn->bMin, sizeof(vec3) ) );
+        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.bMax, &scn->bMax, sizeof(vec3) ) );
+        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.bvhNodes, bvhNodes, sizeof(BvhNode*) ) );
+        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.faces, faces, sizeof(Face*) ) );
+        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.faceClusters, faceClusters, sizeof(FaceCluster*) ) );
+        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.sides, sides, sizeof(u32*) ) );
+        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.meshData, meshData, sizeof(MeshData**) ) );
+        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.setupCb, setupCb, sizeof(RaySetupFptr) ) );
+        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.hitCb, hitCb, sizeof(HitResultFptr) ) );
 
-        u32 totalRays = trq->m_numRays;
         m_profiler.beginProfile();
 
         // while rays to process, process per batch/tile to conserve memory usage
         u32 kTile=0;
-        while ( totalRays > 0 )
+        while ( numRays > 0 )
         {
-            u32 numRaysThisTile = totalRays;
+            u32 numRaysThisTile = numRays;
             if ( m_numRaysPerTile < numRaysThisTile ) numRaysThisTile = m_numRaysPerTile;
             m_profiler.start();
 
-            RL_KERNEL_CALL(1, 1, 1, TileKernel,
-                           numRaysThisTile, eye, orient,
-                          (Store<PointBox>**) pbQueues, (Store<RayLeaf>**) leafQueues,
-                           raySigns, rayOris, rayDirs,
-                           bvhNodes, faces, faceClusters, sides,
-                           meshData,
-                           hitResults[0]);
+            RL_KERNEL_CALL(1, 1, 1, TileKernel, numRaysThisTile);
 
             m_profiler.stop("Tile " + to_string(kTile++));
-            totalRays -= numRaysThisTile;
+            numRays -= numRaysThisTile;
         }
         m_profiler.endProfile("Trace");
   
-
         return ERROR_ALL_FINE;
     }
 
+    QueueRayFptr Tracer::getQueueRayAddress() const
+    {
+        return QueueRay;
+    }
 }

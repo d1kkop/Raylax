@@ -49,7 +49,9 @@ namespace Reylax
                                  &gpuScene->m_bvhTree,
                                  &gpuScene->m_faces,
                                  &gpuScene->m_faceClusters,
-                                 &gpuScene->m_sides);
+                                 &gpuScene->m_sides,
+                                  gpuScene->bMin,
+                                  gpuScene->bMax);
 
         if ( err != ERROR_ALL_FINE )
         {

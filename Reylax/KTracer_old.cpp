@@ -53,7 +53,7 @@ namespace Reylax
                     RayLeaf* rl = leafQueue->getNew(1);
                     rl->faceIdx = 0;
                     rl->node = rb->node;
-                    rl->ray  = rb->ray;
+                    rl->localId  = rb->ray;
                 }
             }
             else
@@ -86,7 +86,7 @@ namespace Reylax
         RayLeaf* rl = leafQueueIn->get(i);
         const BvhNode* leaf = bvhNodes + rl->node;
         assert(leaf->isLeaf() && rl->faceIdx < leaf->numFaces());
-        u32 ray = rl->ray;
+        u32 ray = rl->localId;
         u32 faceIdx  = rl->faceIdx;
         const Face* face = faces + leaf->getFace(faceClusters, faceIdx);
         const vec3& o = rayOris[ray];
@@ -111,7 +111,7 @@ namespace Reylax
              rl = leafQueueOut->getNew(1);
              rl->faceIdx = faceIdx;
              rl->node = rl->node;
-             rl->ray  = rl->ray;
+             rl->localId  = rl->localId;
         }
     }
 

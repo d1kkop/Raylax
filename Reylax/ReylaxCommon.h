@@ -35,15 +35,18 @@ namespace Reylax
      struct PointBox
      {
          vec3 point;
-         u32 node, ray;
+         u32 node;
+         u32 localId;
+         u32 ray;
      };
 
      __align__(4)
      struct RayLeaf
      {
-         u32 ray;
+         u32 localId;
          u32 node;
          u32 faceIdx;
+         u32 ray;
      };
 
      __align__(4)
@@ -97,7 +100,9 @@ namespace Reylax
                           DeviceBuffer** ppBvhTree,
                           DeviceBuffer** ppFaces,
                           DeviceBuffer** ppFaceClusters,
-                          DeviceBuffer** ppSides );
+                          DeviceBuffer** ppSides,
+                          vec3& worldMin,
+                          vec3& worldMax );
 
         static void determineCentre(std::vector<Face>& faces, const MeshData** meshData, vec3& centre);
         static void determineBbox(std::vector<Face>& faces, const MeshData** meshData, vec3& bMin, vec3& bMax);
@@ -136,15 +141,22 @@ namespace Reylax
     // Tracer context
     struct TracerContext
     {
-        vec3 eye;
-        vec3 orient;
-        Store<PointBox> pbQueue[2];
-        Store<RayLeaf>  leafQueue[2];
+        const vec3 bMin, bMax;
+        Store<Ray>*      rayPayload;
+        Store<PointBox>* pbQueues[2];
+        Store<RayLeaf>*  leafQueues[2];
         const BvhNode* bvhNodes;
         const Face* faces;
         const FaceCluster* faceClusters;
         const u32* sides;
         const MeshData* const* meshData;
+        // -- Changes every kernel run 0, to 1 ---
+        u32 queueIn, queueOut;
+        // Output
+        HitResult* hitResults;
+        // Callbacks
+        RaySetupFptr setupCb;
+        HitResultFptr   hitCb;
     };
 
 

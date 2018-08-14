@@ -64,16 +64,15 @@ namespace Reylax
 
     struct ITracer
     {
-        RL_DLL static ITracer* create();
+        RL_DLL static ITracer* create(u32 numRaysPerTile=256*256, u32 maxRecursionDepth=8);
         virtual ~ITracer() = default;
-        virtual u32 trace( const float* eye3, const float* orient3x3,
-                           const IGpuStaticScene* scene, const ITraceQuery* query,
-                           const ITraceResult* const* results, u32 numResults,
-                           HitCallback cb ) = 0;
+        virtual u32 trace( u32 numRays, const IGpuStaticScene* scene, RaySetupFptr setupCb, HitResultFptr hitCb ) = 0;
+        virtual QueueRayFptr getQueueRayAddress() const = 0;
     };
 
 
     RL_DLL void setDevice(u32 i);
     RL_DLL u32  getNumDevices();
     RL_DLL void syncDevice();
+    RL_DLL void setSymbolPtrAsync( const void* dst, const void* src );
 }

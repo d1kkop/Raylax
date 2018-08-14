@@ -16,7 +16,9 @@ namespace Reylax
                        DeviceBuffer** ppBvhTree,
                        DeviceBuffer** ppFaces,
                        DeviceBuffer** ppFaceClusters,
-                       DeviceBuffer** ppSides)
+                       DeviceBuffer** ppSides,
+                       vec3& worldMin,
+                       vec3& worldMax)
     {
         if ( !meshData || numMeshDatas == 0 || !ppBvhTree || !ppFaces || !ppFaceClusters || !ppSides )
         {
@@ -81,6 +83,8 @@ namespace Reylax
 
         // set bbox of first stack node
         determineBbox(st->faces, meshData, st->bMin, st->bMax);
+        worldMin = st->bMin;
+        worldMax = st->bMax;
 
         // generate tree
         while ( top >= 0 )

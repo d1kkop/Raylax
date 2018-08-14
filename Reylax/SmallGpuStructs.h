@@ -25,6 +25,7 @@ namespace Reylax
         DeviceBuffer* m_sides;
         DeviceBuffer* m_meshDataPtrs;
         GpuStaticMesh* m_gpuMeshes;
+        vec3 bMin, bMax;
     };
 
     struct TraceQuery: public ITraceQuery

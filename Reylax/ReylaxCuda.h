@@ -21,6 +21,7 @@ using namespace glm;
 #define CONSTANT __constant__
 #define INLINE
 #define RESTRICT
+#define SHARED __shared__
 
 #define bDim blockDim
 #define tIdx threadIdx
@@ -38,6 +39,7 @@ template <class T> FDEVICE T atomicCAS2(T* lk, T old, T nw) { return atomicCAS(l
 #define CONSTANT
 #define INLINE inline
 #define RESTRICT __restrict
+#define SHARED
 
 extern uint4 cpu_blockDim;
 extern uint4 cpu_threadIdx;

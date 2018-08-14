@@ -30,6 +30,11 @@ namespace Reylax
         RL_CUDA_CALL(cudaDeviceSynchronize());
     }
 
+    void setSymbolPtrAsync(const void* dst, const void* src)
+    {
+        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( dst, src, sizeof(void*), 0, cudaMemcpyHostToDevice ) );
+    }
+
     double time()
     {
         return static_cast<double>(duration_cast<duration<double, milli>>(high_resolution_clock::now().time_since_epoch()).count());
