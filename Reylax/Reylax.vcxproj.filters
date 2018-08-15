@@ -37,10 +37,10 @@
     <ClInclude Include="Mesh.h">
       <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="SmallGpuStructs.h">
+    <ClInclude Include="Tracer.h">
       <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="Tracer.h">
+    <ClInclude Include="GpuStaticScene.h">
       <Filter>Core</Filter>
     </ClInclude>
   </ItemGroup>
@@ -64,14 +64,11 @@
     <ClCompile Include="Mesh.cpp">
       <Filter>Core</Filter>
     </ClCompile>
-    <ClCompile Include="SmallGpuStructs.cpp">
-      <Filter>Core</Filter>
-    </ClCompile>
-    <ClCompile Include="Tracer.cpp">
-      <Filter>Core</Filter>
-    </ClCompile>
     <ClCompile Include="KTracer_old.cpp">
       <Filter>Kernels</Filter>
+    </ClCompile>
+    <ClCompile Include="GpuStaticScene.cpp">
+      <Filter>Core</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -81,6 +78,7 @@
     <CudaCompile Include="KTracer.cpp">
       <Filter>Kernels</Filter>
     </CudaCompile>
+    <CudaCompile Include="Tracer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Fixes.txt" />

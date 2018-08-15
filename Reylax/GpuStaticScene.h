@@ -27,22 +27,4 @@ namespace Reylax
         GpuStaticMesh* m_gpuMeshes;
         vec3 bMin, bMax;
     };
-
-    struct TraceQuery: public ITraceQuery
-    {
-        TraceQuery(const float* rays3, u32 numRays);
-        virtual ~TraceQuery();
-        u32 m_numRays;
-        DeviceBuffer* m_oris;
-        DeviceBuffer* m_dirs;
-        DeviceBuffer* m_signs;
-    };
-
-    struct TraceResult: public ITraceResult
-    {
-        TraceResult(u32 numRays);
-        virtual ~TraceResult();
-        u32 m_numRays;
-        DeviceBuffer* m_result;
-    };
 }

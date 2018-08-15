@@ -56,6 +56,6 @@ namespace Reylax
 
 
     using RaySetupFptr      = void (*)(u32 globalId, u32 localId);
-    using HitResultFptr     = void (*)(u32 globalId, u32 localId, u32 depth, const HitResult& hit, const MeshData* const* meshPtrs, const float* ori3, const float* dir3);
+    using HitResultFptr     = void (*)(u32 globalId, u32 localId, u32 depth, const HitResult& hit, const MeshData* const* meshPtrs);
     using QueueRayFptr      = void (*)(u32 localId, const float* ori3, const float* dir3);
 }

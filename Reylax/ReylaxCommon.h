@@ -139,9 +139,10 @@ namespace Reylax
     };
 
     // Tracer context
+    __align__(8)
     struct TracerContext
     {
-        const vec3 bMin, bMax;
+        vec3 bMin, bMax;
         Store<Ray>*      rayPayload;
         Store<PointBox>* pbQueues[2];
         Store<RayLeaf>*  leafQueues[2];

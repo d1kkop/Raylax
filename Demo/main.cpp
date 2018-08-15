@@ -1,7 +1,5 @@
 #include "main.h"
 using namespace std;
-using namespace glm;
-using namespace Reylax;
 using namespace chrono;
 
 #define LIB_CALL( expr, name ) \
@@ -17,13 +15,15 @@ using namespace chrono;
 
 #define SDL_CALL( expr ) LIB_CALL( expr, "SDL" )
 
-double time() { return static_cast<double>(duration_cast<duration<double, milli>>(high_resolution_clock::now().time_since_epoch()).count()); }
-bool loadModel(const std::string& name, vector<IMesh*>& meshes);
+double Time() { return static_cast<double>(duration_cast<duration<double, milli>>(high_resolution_clock::now().time_since_epoch()).count()); }
 
-extern HOST_OR_DEVICE u32* buffer;
-extern HOST_OR_DEVICE QueueRayFptr QueueRayFunc;
+// In LoadModel.cpp
+extern bool LoadModel(const std::string& name, vector<IMesh*>& meshes);
+
+// In trace.cpp
+extern void UpdateTraceData( const TraceData& td, QueueRayFptr queueRayFptr );
 extern HOST_OR_DEVICE void FirstRays(u32 globalId, u32 localId);
-extern HOST_OR_DEVICE void TraceCallback(u32 globalId, u32 localId, u32 depth, const HitResult& hit, const MeshData* const* meshPtrs, const float* ori3, const float* dir3);
+extern HOST_OR_DEVICE void TraceCallback(u32 globalId, u32 localId, u32 depth, const HitResult& hit, const MeshData* const* meshPtrs);
 
 
 struct Profiler
@@ -31,8 +31,8 @@ struct Profiler
     double m_start;
     vector<pair<string,double>> m_items;
 
-    void start() { m_start = time(); }
-    void stop(string name) { m_items.emplace_back(name, time()-m_start); }
+    void start() { m_start = Time(); }
+    void stop(string name) { m_items.emplace_back(name, Time()-m_start); }
     void showTimings(u32 numFrames)
     {
         printf("---- Timings ---- \n");
@@ -49,6 +49,7 @@ struct Program
     float camPan;
     float camPitch;
     vec3  camPos;
+    TraceData td;
 
     Program()
     {
@@ -158,6 +159,10 @@ struct Program
                 mat4 pitch = rotate(camPitch, vec3(1.f, 0.f, 0.f));
           //      mat3 orient = (yaw * pitch);
                 mat3 orient(1);
+                td.eye    = camPos;
+                td.orient = orient;
+                td.pixels = rt->buffer<u32>();
+                UpdateTraceData( td, tracer->getQueueRayAddress() );
                 err = tracer->trace( numRays, scene, FirstRays, TraceCallback );
                 assert(err==0);
             }
@@ -252,54 +257,53 @@ int main(int argc, char** argv)
     if ( !glRenderer->init(width, height) ) return -1;
 
     IRenderTarget* rt;
-    IGpuStaticScene* scene=nullptr;
-    ITraceQuery* query=nullptr;
-    ITraceResult* result=nullptr;
+    IDeviceBuffer* primaryRays;
+    IGpuStaticScene* scene;
     ITracer* tracer;
     vector<IMesh*> meshes;
 
     // Create render target from a OpenGL texture buffer object
-    rt = IRenderTarget::createFromGLTBO(glRt->id(), width, height);
-    assert(rt);
-
-    // Load test model
-    if ( !loadModel(R"(D:\_Programming\2018\RaytracerCuda\Content/f16.obj)", meshes) )
     {
-        cout << "Failed to load f16" << endl;
+        rt = IRenderTarget::createFromGLTBO(glRt->id(), width, height);
+        assert(rt);
     }
-    scene = IGpuStaticScene::create(meshes.data(), (u32)meshes.size());
-    assert(scene);
-    for ( auto& m : meshes ) delete m;
 
-    // All primary rays only have a unique direction, set this up.
-    vec3* rays = createPrimaryRays(width, height, -1, 1, 1, -1, 1);
-    query = ITraceQuery::create((float*)rays, width*height);
-    assert(query);
-    delete[] rays;
+    // Load test model and use as 'scene'
+    {
+        if ( !LoadModel(R"(D:\_Programming\2018\RaytracerCuda\Content/f16.obj)", meshes) ) return -1;
+        scene = IGpuStaticScene::create(meshes.data(), (u32)meshes.size());
+        assert(scene);
+        for ( auto& m : meshes ) delete m;  // all data is on device, safe to delete meshes in host memory
+    }
 
-    // Each trace has a trace result
-    result = ITraceResult::create(width*height);
-    assert(result);
+    // Set up primary rays of a pinhole camera in local space
+    {
+        vec3* rays = createPrimaryRays(width, height, -1, 1, 1, -1, 1);
+        primaryRays = IDeviceBuffer::create( sizeof(vec3)*width*height );
+        assert(primaryRays);
+        primaryRays->copyFrom(rays, true); // await the transfer to complete before deletion of rays in host memory
+        delete[] rays;
+    }
 
     // Create the actual tracer
     tracer = ITracer::create();
-    setSymbolPtrAsync( QueueRayFunc, tracer->getQueueRayAddress() );
 
     // Update loop
     Program p;
     Profiler pr;
     rt->lock();
-    double tBegin = time();
+    double tBegin = Time();
     u32 numFrames = 0;
+    p.td.rayDirs = primaryRays->ptr<vec3>();
     while ( !p.loopDone )
     {
         p.update( pr );
         p.render( width*height, rt, scene, tracer, *glRenderer, *glRt, pr );
         SDL_GL_SwapWindow(sdl_window);
-        if ( time() - tBegin > 1000.0 )
+        if ( Time() - tBegin > 1000.0 )
         {
             pr.showTimings( numFrames );
-            tBegin = time();
+            tBegin = Time();
             numFrames=0;
         }
         pr.clear();
@@ -307,9 +311,8 @@ int main(int argc, char** argv)
     }
 
     // -- Do cleanup code ---
-    delete result;
-    delete query;
     delete scene;
+    delete primaryRays;
     delete rt;
     delete glRt;
     delete glRenderer;

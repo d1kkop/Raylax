@@ -20,7 +20,7 @@ float _max2(float a, float b) { return a > b ? a : b; }
 vec3 _min2(const vec3& a, const vec3& b) { return vec3(_min2(a.x, b.x), _min2(a.y, b.y), _min2(a.z, b.z)); }
 vec3 _max2(const vec3& a, const vec3& b) { return vec3(_max2(a.x, b.x), _max2(a.y, b.y), _max2(a.z, b.z)); }
 
-bool loadModel(const std::string& name, vector<IMesh*>& meshes)
+bool LoadModel(const std::string& name, vector<IMesh*>& meshes)
 {
     // Create an instance of the Importer class
     Importer importer;

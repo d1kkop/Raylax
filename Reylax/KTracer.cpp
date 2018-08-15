@@ -17,7 +17,12 @@
 
 namespace Reylax
 {
-    DEVICE TracerContext ct;
+    DEVICE CONSTANT TracerContext ct;
+
+    void UpdateTraceContext(const TracerContext& newCt, bool wait)
+    {
+        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( ct, &newCt, sizeof(TracerContext) ) );
+    }
 
 
     DEVICE void QueueRay(u32 localId, const float* ori3, const float* dir3)
@@ -177,7 +182,7 @@ namespace Reylax
         if ( localId >= numRays ) return;
         u32 globalId = tileOffset + localId;
         Ray* ray     = ct.rayPayload->get( localId );
-        ct.hitCb( globalId, localId, depth, ct.hitResults[localId], ct.meshData, &ray->o.x, &ray->d.x );
+        ct.hitCb( globalId, localId, depth, ct.hitResults[localId], ct.meshData );
     }
 
     template <class QIn, class Qout>
@@ -205,8 +210,8 @@ namespace Reylax
             dim3 blocks  ((queryQueues[ct.queueIn]->m_top + BLOCK_THREADS-1)/BLOCK_THREADS);
             dim3 threads (BLOCK_THREADS);
             blocks = dim3(( + BLOCK_THREADS-1)/BLOCK_THREADS);
-            RL_KERNEL_CALL(BLOCK_THREADS, blocks, threads, PointBoxKernel);
-            cudaDeviceSynchronize();
+//            RL_KERNEL_CALL(BLOCK_THREADS, blocks, threads, PointBoxKernel);
+ //           cudaDeviceSynchronize();
 
             DBG_QUERIES_OUT(queryQueues[ct.queueOut]->m_top, remainderQueue->m_top);
         }
@@ -233,8 +238,6 @@ namespace Reylax
             ++numIters;
         } // End while there are still point-box queries
         printf("-- Num iters for a single tile %d --\n", numIters );
-
-        
     }
-    
+
 }

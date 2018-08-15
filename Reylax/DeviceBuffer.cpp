@@ -3,6 +3,11 @@
 
 namespace Reylax
 {
+    IDeviceBuffer* IDeviceBuffer::create(u32 size)
+    {
+        return new DeviceBuffer(size);
+    }
+
     DeviceBuffer::DeviceBuffer(u32 size):
         m_size(size),
         m_devData(nullptr)

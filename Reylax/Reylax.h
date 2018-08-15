@@ -36,6 +36,19 @@ namespace Reylax
         template <class T> T* buffer() const { return reinterpret_cast<T*>(buffer()); }
     };
 
+    struct IDeviceBuffer
+    {
+        RL_DLL static IDeviceBuffer* create(u32 size);
+        virtual ~IDeviceBuffer() = default;
+        virtual void copyFrom( const void* src, bool wait=false ) = 0;
+        virtual void copyTo( void* dst, bool wait=false ) = 0;
+        virtual u32  size() const = 0;
+        virtual void* ptr() const = 0;
+
+        template <class T>
+        inline T* ptr() const { return reinterpret_cast<T*>(ptr()); }
+    };
+
     struct IMesh
     {
         RL_DLL static IMesh* create();
@@ -50,18 +63,6 @@ namespace Reylax
         virtual ~IGpuStaticScene() = default;
     };
 
-    struct ITraceQuery
-    {
-        RL_DLL static ITraceQuery* create(const float* rays3, u32 numRays);
-        virtual ~ITraceQuery() = default;
-    };
-
-    struct ITraceResult
-    {
-        RL_DLL static ITraceResult* create(u32 numRays);
-        virtual ~ITraceResult() = default;
-    };
-
     struct ITracer
     {
         RL_DLL static ITracer* create(u32 numRaysPerTile=256*256, u32 maxRecursionDepth=8);
@@ -74,5 +75,6 @@ namespace Reylax
     RL_DLL void setDevice(u32 i);
     RL_DLL u32  getNumDevices();
     RL_DLL void syncDevice();
-    RL_DLL void setSymbolPtrAsync( const void* dst, const void* src );
+    RL_DLL void setSymbolPtr( const void* dst, const void* src, bool wait=false );
+    RL_DLL void setSymbolData( const void* dst, const void* src, u32 size, bool wait=false );
 }

@@ -1,4 +1,4 @@
-#include "SmallGpuStructs.h"
+#include "GpuStaticScene.h"
 #include "DeviceBuffer.h"
 #include "Mesh.h"
 #include <iostream>
@@ -118,58 +118,4 @@ namespace Reylax
         delete m_meshDataPtrs;
         delete m_gpuMeshes;
     }
-
-    // ------ TraceQuery ----------------------------------------------------------------------------------------
-
-    ITraceQuery* ITraceQuery::create(const float* rays3, u32 numRays)
-    {
-        if ( !rays3 || numRays==0 ) return nullptr;
-        ITraceQuery* query = new TraceQuery(rays3, numRays);
-    #if RL_PRINT_STATS
-        printf("TraceQuery numRays: %d, size %.3fmb\n", numRays, (float)sizeof(float)*3*numRays/1024/1024);
-    #endif
-        return query;
-    }
-
-    TraceQuery::TraceQuery(const float* rays3, u32 numRays):
-        m_numRays(numRays),
-        m_oris(new DeviceBuffer(sizeof(float)*3*numRays)), /* oris are for secondary ray launches */
-        m_dirs(new DeviceBuffer(sizeof(float)*3*numRays)),
-        m_signs(new DeviceBuffer(sizeof(char)*3*m_numRays))
-    {
-        assert(numRays!=0);
-        m_dirs->copyFrom(rays3, false);
-    }
-
-    TraceQuery::~TraceQuery()
-    {
-        delete m_oris;
-        delete m_dirs;
-        delete m_signs;
-    }
-
-    // ------ TraceResult ----------------------------------------------------------------------------------------
-
-    ITraceResult* ITraceResult::create(u32 numRays)
-    {
-        if (numRays==0) return nullptr;
-        ITraceResult* res = new TraceResult(numRays);
-        return res;
-    }
-
-    TraceResult::TraceResult(u32 numRays):
-        m_numRays(numRays),
-        m_result(new DeviceBuffer(numRays*sizeof(HitResult)))
-    {
-        assert(m_numRays!=0);
-    #if RL_PRINT_STATS
-        printf("TraceResult numRays: %d, size %.3fmb\n", numRays, (float)sizeof(HitResult)*numRays/1024/1024);
-    #endif
-    }
-
-    TraceResult::~TraceResult()
-    {
-        delete m_result;
-    }
-
 }

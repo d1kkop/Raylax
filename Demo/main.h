@@ -27,3 +27,15 @@
 #else
 #define HOST_OR_DEVICE
 #endif
+
+using namespace glm;
+using namespace Reylax;
+
+__align__(8)
+struct TraceData
+{
+    vec3 eye;
+    mat3 orient;
+    vec3* rayDirs;
+    u32*  pixels;
+};

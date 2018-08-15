@@ -24,5 +24,6 @@ namespace Reylax
         u32 m_numRayQueries;
         u32 m_numRaysPerTile;
         Profiler m_profiler;
+        TracerContext m_ctx;
     };
 }

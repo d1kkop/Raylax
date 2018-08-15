@@ -1,5 +1,5 @@
 #include "Tracer.h"
-#include "SmallGpuStructs.h"
+#include "GpuStaticScene.h"
 #include "DeviceBuffer.h"
 #include "Reylax_internal.h"
 using namespace std;
@@ -9,8 +9,7 @@ namespace Reylax
 {
     GLOBAL void TileKernel(u32 numRays);
     DEVICE void QueueRay(u32 localId, const float* ori, const float* dir);
-
-    extern DEVICE TracerContext ct;
+    extern void UpdateTraceContext(const TracerContext& ct, bool wait);
 
 
     ITracer* ITracer::create(u32 numRaysPerTile, u32 maxRecursionDepth)
@@ -27,6 +26,8 @@ namespace Reylax
         m_rayQueue(nullptr),
         m_rayBuffer(nullptr)
     {
+        memset(&m_ctx, 0, sizeof(TracerContext));
+
         for ( u32 i=0; i<2; i++ )
         {
             m_pointBoxQueue[i]  = nullptr;
@@ -67,11 +68,11 @@ namespace Reylax
         COPY_PTR_TO_DEVICE_ASYNC(m_rayQueue, m_rayBuffer, Store<Ray>, m_elements);
         COPY_VALUE_TO_DEVICE_ASYNC(m_rayQueue, numRayQueries, Store<Ray>, m_max, sizeof(u32));
 
-        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.rayPayload, m_rayQueue->ptr<void>(), sizeof(void*), 0 ) );
-        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.pbQueues[0], m_pointBoxBuffer[0]->ptr<void>(), sizeof(void*), 0 ) );
-        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.pbQueues[1], m_pointBoxBuffer[1]->ptr<void>(), sizeof(void*), 0 ) );
-        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.leafQueues[0], m_leafQueue[0]->ptr<void>(), sizeof(void*), 0 ) );
-        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.leafQueues[1], m_leafQueue[1]->ptr<void>(), sizeof(void*), 0 ) );
+        m_ctx.rayPayload    = m_rayQueue->ptr<Store<Ray>>();
+        m_ctx.pbQueues[0]   = m_pointBoxQueue[0]->ptr<Store<PointBox>>();
+        m_ctx.pbQueues[1]   = m_pointBoxQueue[1]->ptr<Store<PointBox>>();
+        m_ctx.leafQueues[0] = m_leafQueue[0]->ptr<Store<RayLeaf>>();
+        m_ctx.leafQueues[1] = m_leafQueue[1]->ptr<Store<RayLeaf>>();
 
         u64 totalMemory = 0;
         for ( u32 i=0; i<2; i++ )
@@ -115,15 +116,14 @@ namespace Reylax
         const u32* sides                = scn->m_sides->ptr<const u32>();
         MeshData** meshData             = scn->m_meshDataPtrs->ptr<MeshData*>();
 
-        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.bMin, &scn->bMin, sizeof(vec3) ) );
-        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.bMax, &scn->bMax, sizeof(vec3) ) );
-        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.bvhNodes, bvhNodes, sizeof(BvhNode*) ) );
-        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.faces, faces, sizeof(Face*) ) );
-        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.faceClusters, faceClusters, sizeof(FaceCluster*) ) );
-        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.sides, sides, sizeof(u32*) ) );
-        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.meshData, meshData, sizeof(MeshData**) ) );
-        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.setupCb, setupCb, sizeof(RaySetupFptr) ) );
-        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( &ct.hitCb, hitCb, sizeof(HitResultFptr) ) );
+        m_ctx.bMin = scn->bMin;
+        m_ctx.bMax = scn->bMax;
+        m_ctx.bvhNodes = bvhNodes;
+        m_ctx.faces = faces;
+        m_ctx.faceClusters = faceClusters;
+        m_ctx.sides = sides;
+        m_ctx.meshData = meshData;
+        UpdateTraceContext( m_ctx, false );
 
         m_profiler.beginProfile();
 
