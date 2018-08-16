@@ -20,7 +20,6 @@ namespace Reylax
     constexpr u32 VERTEX_DATA_EXTRA4        = 9;
     constexpr u32 VERTEX_DATA_COUNT         = 10; // This is not a slot
 
-
     __declspec(align(4))
     struct Material
     {

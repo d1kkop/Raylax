@@ -7,26 +7,24 @@ using namespace std;
 
 namespace Reylax
 {
-    GLOBAL void TileKernel(u32 numRays);
+    GLOBAL void TileKernel(u32 numRays, u32 tileOffset);
     DEVICE void QueueRay(u32 localId, const float* ori, const float* dir);
     extern void UpdateTraceContext(const TracerContext& ct, bool wait);
 
 
     ITracer* ITracer::create(u32 numRaysPerTile, u32 maxRecursionDepth)
     {
-        u32 queueLength = numRaysPerTile*maxRecursionDepth;
-        return new Tracer( queueLength, queueLength, queueLength, numRaysPerTile);
+        return new Tracer( numRaysPerTile, maxRecursionDepth );
     }
 
-    Tracer::Tracer(u32 numPointBoxQueries, u32 numLeafQueries, u32 numRayQueries, u32 numRaysPerTile):
-        m_numPointBoxQueries(numPointBoxQueries),
-        m_numRayLeafQueries(numLeafQueries),
-        m_numRayQueries(numRayQueries),
+    Tracer::Tracer(u32 numRaysPerTile, u32 maxRecursionDepth):
         m_numRaysPerTile(numRaysPerTile),
         m_rayQueue(nullptr),
-        m_rayBuffer(nullptr)
+        m_rayBuffer(nullptr),
+        m_hitResults(nullptr)
     {
         memset(&m_ctx, 0, sizeof(TracerContext));
+        m_ctx.maxDepth = maxRecursionDepth;
 
         for ( u32 i=0; i<2; i++ )
         {
@@ -39,40 +37,44 @@ namespace Reylax
     #if RL_PRINT_STATS
         printf("\n--- Tracer allocations ---\n\n");
     #endif
-        
+
+        u32 numQueries = m_numRaysPerTile*maxRecursionDepth;
         for ( u32 i=0; i<2; i++ )
         {
             m_pointBoxQueue[i]  = new DeviceBuffer(sizeof(Store<PointBox>));
-            m_pointBoxBuffer[i] = new DeviceBuffer(numPointBoxQueries*sizeof(PointBox));
+            m_pointBoxBuffer[i] = new DeviceBuffer(numQueries*sizeof(PointBox));
             m_leafQueue[i]  = new DeviceBuffer(sizeof(Store<RayLeaf>));
-            m_leafBuffer[i] = new DeviceBuffer(numLeafQueries*sizeof(RayLeaf));
+            m_leafBuffer[i] = new DeviceBuffer(numQueries*sizeof(RayLeaf));
         #if RL_PRINT_STATS
-            printf("PointBoxQueries %d, count %d, size %.3fmb\n", i, numPointBoxQueries, (float)m_pointBoxBuffer[i]->size()/1024/1024);
-            printf("RayLeafQueries %d, count %d, size %.3fmb\n", i, numLeafQueries, (float)m_leafBuffer[i]->size()/1024/1024);
+            printf("PointBoxQueries %.3fmb\n", (float)m_pointBoxBuffer[i]->size()/1024/1024);
+            printf("RayLeafQueries %.3fmb\n", (float)m_leafBuffer[i]->size()/1024/1024);
         #endif
         }
-        m_rayQueue  = new DeviceBuffer(sizeof(Store<Ray>));
-        m_rayBuffer = new DeviceBuffer(numRayQueries*sizeof(Ray));
+        m_rayQueue   = new DeviceBuffer(sizeof(Store<Ray>));
+        m_rayBuffer  = new DeviceBuffer(numQueries*sizeof(Ray));
+        m_hitResults = new DeviceBuffer(numRaysPerTile*sizeof(HitResult));
     #if RL_PRINT_STATS
-        printf("RayQueries, count %d, size %.3fmb\n", numRayQueries, (float)m_rayBuffer->size()/1024/1024);
+        printf("RayQueries %.3fmb\n", (float)m_rayBuffer->size()/1024/1024);
+        printf("HitResults %.3fmb\n", (float)m_hitResults->size()/1024/1024);
     #endif
 
         // Assign device buffers to queue elements ptr
         for ( u32 i=0; i<2; i++ )
         {
             COPY_PTR_TO_DEVICE_ASYNC(m_pointBoxQueue[i], m_pointBoxBuffer[i], Store<PointBox>, m_elements);
-            COPY_VALUE_TO_DEVICE_ASYNC(m_pointBoxQueue[i], numPointBoxQueries, Store<PointBox>, m_max, sizeof(u32));
+            COPY_VALUE_TO_DEVICE_ASYNC(m_pointBoxQueue[i], numQueries, Store<PointBox>, m_max, sizeof(u32));
             COPY_PTR_TO_DEVICE_ASYNC(m_leafQueue[i], m_leafBuffer[i], Store<RayLeaf>, m_elements);
-            COPY_VALUE_TO_DEVICE_ASYNC(m_leafQueue[i], numLeafQueries, Store<RayLeaf>, m_max, sizeof(u32));
+            COPY_VALUE_TO_DEVICE_ASYNC(m_leafQueue[i], numQueries, Store<RayLeaf>, m_max, sizeof(u32));
         }
         COPY_PTR_TO_DEVICE_ASYNC(m_rayQueue, m_rayBuffer, Store<Ray>, m_elements);
-        COPY_VALUE_TO_DEVICE_ASYNC(m_rayQueue, numRayQueries, Store<Ray>, m_max, sizeof(u32));
+        COPY_VALUE_TO_DEVICE_ASYNC(m_rayQueue, numQueries, Store<Ray>, m_max, sizeof(u32));
 
         m_ctx.rayPayload    = m_rayQueue->ptr<Store<Ray>>();
         m_ctx.pbQueues[0]   = m_pointBoxQueue[0]->ptr<Store<PointBox>>();
         m_ctx.pbQueues[1]   = m_pointBoxQueue[1]->ptr<Store<PointBox>>();
         m_ctx.leafQueues[0] = m_leafQueue[0]->ptr<Store<RayLeaf>>();
         m_ctx.leafQueues[1] = m_leafQueue[1]->ptr<Store<RayLeaf>>();
+        m_ctx.hitResults    = m_hitResults->ptr<HitResult>();
 
         u64 totalMemory = 0;
         for ( u32 i=0; i<2; i++ )
@@ -80,7 +82,8 @@ namespace Reylax
             totalMemory += m_pointBoxBuffer[i]->size() + m_pointBoxQueue[i]->size();
             totalMemory += m_leafBuffer[i]->size() + m_leafQueue[i]->size();
         }
-        
+        totalMemory += m_rayQueue->size() + m_rayBuffer->size();
+
         printf("Total: %.3fmb\n", (float)totalMemory/1024/1024);
         printf("\n--- End Tracer allocations ---\n\n");
 
@@ -99,6 +102,7 @@ namespace Reylax
         }
         delete m_rayQueue;
         delete m_rayBuffer;
+        delete m_hitResults;
     }
 
     u32 Tracer::trace(u32 numRays, const IGpuStaticScene* scene, RaySetupFptr setupCb, HitResultFptr hitCb)
@@ -129,16 +133,17 @@ namespace Reylax
 
         // while rays to process, process per batch/tile to conserve memory usage
         u32 kTile=0;
-        while ( numRays > 0 )
+        u32 tileOffset=0;
+        while ( tileOffset != numRays )
         {
-            u32 numRaysThisTile = numRays;
-            if ( m_numRaysPerTile < numRaysThisTile ) numRaysThisTile = m_numRaysPerTile;
+            u32 numRaysTile = min( m_numRaysPerTile, numRays-tileOffset );
+
             m_profiler.start();
+            RL_KERNEL_CALL( 1, 1, 1, TileKernel, numRaysTile, tileOffset );
+            m_profiler.stop( "Tile " + to_string(kTile) );
 
-            RL_KERNEL_CALL(1, 1, 1, TileKernel, numRaysThisTile);
-
-            m_profiler.stop("Tile " + to_string(kTile++));
-            numRays -= numRaysThisTile;
+            kTile++;
+            tileOffset += numRaysTile;
         }
         m_profiler.endProfile("Trace");
   

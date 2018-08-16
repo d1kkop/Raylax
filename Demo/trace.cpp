@@ -3,8 +3,23 @@ using namespace std;
 using namespace chrono;
 
 
+
 HOST_OR_DEVICE TraceData TD;
 HOST_OR_DEVICE QueueRayFptr QueueRayFunc;
+
+
+template <typename T>
+void SetSymbol(T& dst, const void* src, bool wait=false)
+{
+#if !DEMO_CPU
+    cudaError err;
+    if ( !wait ) err = cudaMemcpyToSymbolAsync(dst, src, sizeof(T), 0, cudaMemcpyDefault);
+    else         err = cudaMemcpyToSymbol(dst, src, sizeof(T), 0, cudaMemcpyDefault);
+    assert(err==0);
+#else
+    memcpy(dst, src, sizeof(T));
+#endif
+}
 
 
 void UpdateTraceData(const TraceData& td, QueueRayFptr queueRayFptr)
@@ -13,10 +28,11 @@ void UpdateTraceData(const TraceData& td, QueueRayFptr queueRayFptr)
     if ( firstTime )
     {
         firstTime=false;
-        ::cudaMemcpyToSymbolAsync(&QueueRayFunc, queueRayFptr, sizeof(QueueRayFptr), 0, cudaMemcpyHostToDevice);
-        setSymbolData( QueueRayFunc, queueRayFptr, sizeof(QueueRayFptr) );
+        cudaError err = ::cudaMemcpyToSymbolAsync( QueueRayFunc, &queueRayFptr, sizeof(QueueRayFptr), 0, cudaMemcpyHostToDevice);
+        assert( err == 0 );
+        SetSymbol( QueueRayFunc, &queueRayFptr, sizeof(QueueRayFptr) );
     }
-    setSymbolData( &TD, &td, sizeof(TraceData) );
+    SetSymbol( TD, &td, sizeof(TraceData) );
 }
 
 HOST_OR_DEVICE vec3 interpolate3(const HitResult& hit, const MeshData* meshData, u32 dataIdx)
@@ -33,7 +49,6 @@ HOST_OR_DEVICE vec3 interpolate3(const HitResult& hit, const MeshData* meshData,
     float w = 1-(u+v);
     return vd1*u + vd2*v + vd3*w;
 }
-
 
 HOST_OR_DEVICE void FirstRays(u32 globalId, u32 localId)
 {

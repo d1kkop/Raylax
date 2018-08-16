@@ -8,7 +8,7 @@
 
 #define BVH_MAX_DEPTH 64
 #define BVH_NUM_FACES_IN_LEAF 32
-#define BVH_DBG_INFO 1
+#define BVH_DBG_INFO 0
 
 #define BVH_ISLEAF( idx ) (((idx)>>31)==1)
 #define BVH_GETNUM_TRIANGLES(idx) ((idx)&0x7FFFFFF)
@@ -158,6 +158,8 @@ namespace Reylax
         // Callbacks
         RaySetupFptr setupCb;
         HitResultFptr   hitCb;
+        // constants
+        u32 maxDepth;
     };
 
 

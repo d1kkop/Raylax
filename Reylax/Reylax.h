@@ -75,6 +75,4 @@ namespace Reylax
     RL_DLL void setDevice(u32 i);
     RL_DLL u32  getNumDevices();
     RL_DLL void syncDevice();
-    RL_DLL void setSymbolPtr( const void* dst, const void* src, bool wait=false );
-    RL_DLL void setSymbolData( const void* dst, const void* src, u32 size, bool wait=false );
 }

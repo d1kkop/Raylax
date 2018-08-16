@@ -3,16 +3,21 @@
 #define BLOCK_THREADS 256
 #define NUM_RAYBOX_QUEUES 32
 #define NUM_LEAF_QUEUES 32
-
-#define DBG_RB_QUERIES 0
-#define DBG_RL_QUERIES 0
-
 #define MARCH_EPSILON 0.001f
 
-#define DBG_QUERIES_BEGIN( str ) printf("\n--- %s ---\n", (str))
-#define DBG_QUERIES_IN( itr, num ) printf("Itr: %d, in %d\n", (itr), (num))
-#define DBG_QUERIES_OUT( numOut, numOther ) printf("Out: %d, newQueue %d\n", (numOut),(numOther) )
-#define DBG_QUERIES_END( str) printf("\n--- End %s queries---\n", (str) )
+#define DBG_QUERIES 0
+
+#if DBG_QUERIES
+    #define DBG_QUERIES_BEGIN( str ) printf("\n--- %s ---\n", (str))
+    #define DBG_QUERIES_IN( itr, num ) printf("Itr: %d, in %d\n", (itr), (num))
+    #define DBG_QUERIES_OUT( numOut, numOther ) printf("Out: %d, newQueue %d\n", (numOut),(numOther) )
+    #define DBG_QUERIES_END( str) printf("\n--- End %s queries---\n", (str) )
+#else
+    #define DBG_QUERIES_BEGIN( str )
+    #define DBG_QUERIES_IN( itr, num )
+    #define DBG_QUERIES_OUT( numOut, numOther )
+    #define DBG_QUERIES_END( str)
+#endif
 
 
 namespace Reylax
@@ -21,7 +26,7 @@ namespace Reylax
 
     void UpdateTraceContext(const TracerContext& newCt, bool wait)
     {
-        RL_CUDA_CALL( cudaMemcpyToSymbolAsync( ct, &newCt, sizeof(TracerContext) ) );
+        SetSymbol( ct, &newCt );
     }
 
 
@@ -165,7 +170,7 @@ namespace Reylax
             float distToBox = 0.f;
             u32 nextBoxId   = SelectNextBox( bounds, ct.sides + sideIdx*6, signs, o, invd, distToBox );
 
-            if ( result->dist > distToBox )
+            if (nextBoxId != RL_INVALID_INDEX && result->dist > distToBox )
             {
                 PointBox* pb    = ct.pbQueues[0]->getNew(1);
                 pb->localId     = leaf->localId;
@@ -219,25 +224,37 @@ namespace Reylax
         DBG_QUERIES_END(queries);
     }
 
-    GLOBAL void TileKernel(u32 numRays)
+    GLOBAL void TileKernel(u32 numRays, u32 tileOffset)
     {
         // TODO should be filled from some other kernel
-        ct.pbQueues[0]->m_top = 0;
-        
-        u32 numIters = 0;
-        while ( ct.pbQueues[0]->m_top != 0 )
+        ct.pbQueues[0]->m_top = 1;
+
+        u32 depth = 0;
+        while ( ct.pbQueues[0]->m_top != 0 && depth < ct.maxDepth )
         {
-            // Iterate Point-box queries until queues are empty
-            ct.leafQueues[0]->m_top = 0;
-            DoQueries( "Point-box", numRays, ct.pbQueues, ct.leafQueues[0] );
+            u32 numIters = 0;
+            while ( ct.pbQueues[0]->m_top != 0 )
+            {
+                // Iterate Point-box queries until queues are empty
+                ct.leafQueues[0]->m_top = 0;
+                DoQueries("Point-box", numRays, ct.pbQueues, ct.leafQueues[0]);
 
-            // Iterate Ray/leaf queries until queues are empty
-            ct.pbQueues[0]->m_top = 0;
-            DoQueries( "Ray-leaf", numRays, ct.leafQueues, ct.pbQueues[0] );
+                // Iterate Ray/leaf queries until queues are empty
+                ct.pbQueues[0]->m_top = 0;
+                DoQueries("Ray-leaf", numRays, ct.leafQueues, ct.pbQueues[0]);
 
-            ++numIters;
-        } // End while there are still point-box queries
-        printf("-- Num iters for a single tile %d --\n", numIters );
+                ++numIters;
+            } // End while there are still point-box queries
+        //    printf("-- Num iters for a single tile %d --\n", numIters );
+
+            // TODO: For now, for each ray in tile, execute hit result (whether it was hit or not)
+            dim3 blocks  ((numRays + BLOCK_THREADS-1)/BLOCK_THREADS);
+            dim3 threads (BLOCK_THREADS);
+            RL_KERNEL_CALL(BLOCK_THREADS, blocks, threads, HitCallbackKernel, numRays, tileOffset, depth);
+
+            depth++;
+        }
+
     }
 
 }

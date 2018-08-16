@@ -30,27 +30,6 @@ namespace Reylax
         RL_CUDA_CALL(cudaDeviceSynchronize());
     }
 
-    void setSymbolPtr(const void* dst, const void* src, bool wait)
-    {
-        setSymbolData(dst, src, sizeof(void*), wait);
-    }
-
-    void setSymbolData(const void* dst, const void* src, u32 size, bool wait)
-    {
-    #if RL_CUDA
-        if ( !wait )
-        {
-            RL_CUDA_CALL(::cudaMemcpyToSymbolAsync(dst, src, size, 0, cudaMemcpyHostToDevice));
-        }
-        else
-        {
-            RL_CUDA_CALL(::cudaMemcpyToSymbol(dst, src, size, 0, cudaMemcpyHostToDevice));
-        }
-    #else
-        memcpy( dst, src, size );
-    #endif
-    }
-
     double time()
     {
         return static_cast<double>(duration_cast<duration<double, milli>>(high_resolution_clock::now().time_since_epoch()).count());
@@ -85,7 +64,6 @@ namespace Reylax
         }
     #endif
     }
-
 
     u32 hostOrDeviceCpy(void* dst, const void* src, u32 size, cudaMemcpyKind kind, bool async)
     {

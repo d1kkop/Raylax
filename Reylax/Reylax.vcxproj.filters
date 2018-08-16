@@ -78,7 +78,9 @@
     <CudaCompile Include="KTracer.cpp">
       <Filter>Kernels</Filter>
     </CudaCompile>
-    <CudaCompile Include="Tracer.cpp" />
+    <CudaCompile Include="Tracer.cpp">
+      <Filter>Core</Filter>
+    </CudaCompile>
   </ItemGroup>
   <ItemGroup>
     <Text Include="Fixes.txt" />

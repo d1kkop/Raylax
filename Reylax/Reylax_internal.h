@@ -44,6 +44,18 @@ namespace Reylax
     u32  hostOrDeviceCpy( void* dst, const void* src, u32 size, cudaMemcpyKind kind, bool async );
 
 
+    template <typename T>
+    void SetSymbol(T& dst, const void* src, bool wait=false)
+    {
+    #if RL_CUDA
+        if ( !wait ) RL_CUDA_CALL( cudaMemcpyToSymbolAsync(dst, src, sizeof(T), 0, cudaMemcpyDefault) );
+        else         RL_CUDA_CALL( cudaMemcpyToSymbol(dst, src, sizeof(T), 0, cudaMemcpyDefault) );
+    #else
+        memcpy(&dst, src, sizeof(T));
+    #endif
+    }
+
+
     struct Profiler
     {
         double m_start;
