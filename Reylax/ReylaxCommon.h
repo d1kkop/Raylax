@@ -159,6 +159,7 @@ namespace Reylax
         RaySetupFptr setupCb;
         HitResultFptr   hitCb;
         // constants
+        u32 curDepth;
         u32 maxDepth;
     };
 

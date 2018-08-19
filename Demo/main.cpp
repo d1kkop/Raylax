@@ -234,8 +234,8 @@ int main(int argc, char** argv)
     float kDist = temp_BoxRayIntersect( bMin, bMax, o, invd );
 
     const char* winTitle = "ReylaxTest";
-    int width  = 1920;
-    int height = 1080;
+    int width  = 256;
+    int height = 256;
 
     setDevice( getNumDevices()-1 );
 
@@ -294,7 +294,7 @@ int main(int argc, char** argv)
     rt->lock();
     double tBegin = Time();
     u32 numFrames = 0;
-    p.td.rayDirs = primaryRays->ptr<vec3>();
+    p.td.rayDirs  = primaryRays->ptr<vec3>();
     while ( !p.loopDone )
     {
         p.update( pr );

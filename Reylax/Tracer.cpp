@@ -59,15 +59,19 @@ namespace Reylax
     #endif
 
         // Assign device buffers to queue elements ptr
+        u32 zero=0;
         for ( u32 i=0; i<2; i++ )
         {
             COPY_PTR_TO_DEVICE_ASYNC(m_pointBoxQueue[i], m_pointBoxBuffer[i], Store<PointBox>, m_elements);
             COPY_VALUE_TO_DEVICE_ASYNC(m_pointBoxQueue[i], numQueries, Store<PointBox>, m_max, sizeof(u32));
+            COPY_VALUE_TO_DEVICE_ASYNC(m_pointBoxQueue[i], zero, Store<PointBox>, m_top, sizeof(u32));
             COPY_PTR_TO_DEVICE_ASYNC(m_leafQueue[i], m_leafBuffer[i], Store<RayLeaf>, m_elements);
             COPY_VALUE_TO_DEVICE_ASYNC(m_leafQueue[i], numQueries, Store<RayLeaf>, m_max, sizeof(u32));
+            COPY_VALUE_TO_DEVICE_ASYNC(m_leafQueue[i], zero, Store<RayLeaf>, m_top, sizeof(u32));
         }
         COPY_PTR_TO_DEVICE_ASYNC(m_rayQueue, m_rayBuffer, Store<Ray>, m_elements);
         COPY_VALUE_TO_DEVICE_ASYNC(m_rayQueue, numQueries, Store<Ray>, m_max, sizeof(u32));
+        COPY_VALUE_TO_DEVICE_ASYNC(m_rayQueue, zero, Store<Ray>, m_top, sizeof(u32));
 
         m_ctx.rayPayload    = m_rayQueue->ptr<Store<Ray>>();
         m_ctx.pbQueues[0]   = m_pointBoxQueue[0]->ptr<Store<PointBox>>();
@@ -120,6 +124,8 @@ namespace Reylax
         const u32* sides                = scn->m_sides->ptr<const u32>();
         MeshData** meshData             = scn->m_meshDataPtrs->ptr<MeshData*>();
 
+        m_ctx.setupCb = setupCb;
+        m_ctx.hitCb = hitCb;
         m_ctx.bMin = scn->bMin;
         m_ctx.bMax = scn->bMax;
         m_ctx.bvhNodes = bvhNodes;

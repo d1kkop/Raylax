@@ -48,8 +48,8 @@ namespace Reylax
     void SetSymbol(T& dst, const void* src, bool wait=false)
     {
     #if RL_CUDA
-        if ( !wait ) RL_CUDA_CALL( cudaMemcpyToSymbolAsync(dst, src, sizeof(T), 0, cudaMemcpyDefault) );
-        else         RL_CUDA_CALL( cudaMemcpyToSymbol(dst, src, sizeof(T), 0, cudaMemcpyDefault) );
+        if ( !wait ) { RL_CUDA_CALL(cudaMemcpyToSymbolAsync(dst, src, sizeof(T), 0, cudaMemcpyDefault)); }
+        else { RL_CUDA_CALL(cudaMemcpyToSymbol(dst, src, sizeof(T), 0, cudaMemcpyDefault)); }
     #else
         memcpy(&dst, src, sizeof(T));
     #endif

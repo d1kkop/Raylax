@@ -29,10 +29,9 @@ namespace Reylax
         SetSymbol( ct, &newCt );
     }
 
-
-    DEVICE void QueueRay(u32 localId, const float* ori3, const float* dir3)
+    DEVICE void QueueRay(const float* ori3, const float* dir3)
     {
-        Ray* ray     = ct.rayPayload->getNew(1);
+        Ray* ray = ct.rayPayload->getNew(1);
         vec3 d = *(vec3*)dir3;
         ray->o = *(vec3*)ori3;
         ray->d = d;
@@ -40,12 +39,36 @@ namespace Reylax
         ray->sign[0] = d.x > 0 ? 0 : 1;
         ray->sign[1] = d.y > 0 ? 0 : 1;
         ray->sign[2] = d.z > 0 ? 0 : 1;
-
         PointBox* pb = ct.pbQueues[0]->getNew(1);
-        pb->point   = *(vec3*)ori3;
-        pb->localId = localId;
-        pb->node    = 0;
-        pb->ray     = (u32)(ray - ct.rayPayload->m_elements);
+        pb->point    = *(vec3*)ori3;
+        pb->ray      = (u32)(ray - ct.rayPayload->m_elements);
+        // localId and node are set from RayRootBoxKernel see below on first iteration
+        if ( ct.curDepth != 0 )
+        {
+            pb->localId  = bIdx.x * bDim.x + tIdx.x;
+            pb->node     = 0;
+        }
+    }
+
+    GLOBAL void RayRootBoxKernel()
+    {
+        u32 i = bIdx.x * bDim.x + tIdx.x;
+        if ( i >= ct.pbQueues[ct.queueIn]->m_top ) return;
+        PointBox* pb = ct.pbQueues[ct.queueIn]->get(i);
+        Ray* ray     = ct.rayPayload->get(pb->ray);
+        //if ( i == 128*256+128 )
+        //{
+        //    int j = 0;
+        //}
+        float kDist  = BoxRayIntersect( ct.bMin, ct.bMax, pb->point, ray->invd );
+        if ( kDist != FLT_MAX )
+        {
+            PointBox* pbNew = ct.pbQueues[ct.queueOut]->getNew(1);
+            pbNew->localId = pb->localId;
+            pbNew->node    = 0;
+            pbNew->ray     = pb->ray;
+            pbNew->point   = pb->point + (kDist+MARCH_EPSILON)*ray->d; // put point 'just' inside box
+        }
     }
 
 
@@ -140,6 +163,7 @@ namespace Reylax
             result->v = fV;
             result->dist = fDist;
             result->face = closestFace;
+            result->ray  = leaf->ray;
         #pragma unroll
             for ( u32 i=0; i<3; ++i )
             {
@@ -181,31 +205,40 @@ namespace Reylax
         }
     }
 
-    GLOBAL void HitCallbackKernel(u32 numRays, u32 tileOffset, u32 depth)
+    GLOBAL void SetupRays(u32 numRays, u32 tileOffset)
     {
         u32 localId = bIdx.x * bDim.x + tIdx.x;
         if ( localId >= numRays ) return;
         u32 globalId = tileOffset + localId;
-        Ray* ray     = ct.rayPayload->get( localId );
-        ct.hitCb( globalId, localId, depth, ct.hitResults[localId], ct.meshData );
+        ct.setupCb( globalId, localId );
     }
 
-    template <class QIn, class Qout>
-    DEVICE void DoQueries(const char* queries, u32 numRays, Store<QIn>** queryQueues, Store<Qout>* remainderQueue)
+    GLOBAL void ResetHitResults(u32 numRays)
+    {
+        u32 localId = bIdx.x * bDim.x + tIdx.x;
+        if ( localId >= numRays ) return;
+        ct.hitResults[localId].dist = FLT_MAX;
+    }
+
+    GLOBAL void HitCallbackKernel(u32 numRays, u32 tileOffset)
+    {
+        u32 localId = bIdx.x * bDim.x + tIdx.x;
+        if ( localId >= numRays ) return;
+        if ( ct.hitResults[localId].dist == FLT_MAX ) return;
+        u32 globalId = tileOffset + localId;
+        const HitResult& hit = ct.hitResults[localId];
+        Ray* ray = ct.rayPayload->get( hit.ray );
+        ct.hitCb( globalId, localId, ct.curDepth, hit, ct.meshData );
+    }
+
+    template <class QIn, class Qout, class Func>
+    DEVICE void DoQueries(const char* queries, u32 numRays, Store<QIn>** queryQueues, Store<Qout>* remainderQueue, Func f)
     {
         DBG_QUERIES_BEGIN(queries);
 
-        for ( u32 i=0; /*no stop cond*/; ++i )
+        // if no queries left to solve, quit
+        while ( queryQueues[ct.queueIn]->m_top!=0 )
         {
-            ct.queueIn  = i%2;
-            ct.queueOut = (i+1)%2;
-
-            // stop if all rb queries are done
-            if ( queryQueues[ct.queueIn]->m_top==0 )
-            {
-                break;
-            }
-
             // ensure top out is set to zero
             queryQueues[ct.queueOut]->m_top = 0;
 
@@ -214,11 +247,13 @@ namespace Reylax
             // execute all rb queries from queue-in and generate new to queue-out or leaf-queue
             dim3 blocks  ((queryQueues[ct.queueIn]->m_top + BLOCK_THREADS-1)/BLOCK_THREADS);
             dim3 threads (BLOCK_THREADS);
-            blocks = dim3(( + BLOCK_THREADS-1)/BLOCK_THREADS);
-//            RL_KERNEL_CALL(BLOCK_THREADS, blocks, threads, PointBoxKernel);
- //           cudaDeviceSynchronize();
+            RL_KERNEL_CALL(BLOCK_THREADS, blocks, threads, f);
+            // cudaDeviceSynchronize();
 
             DBG_QUERIES_OUT(queryQueues[ct.queueOut]->m_top, remainderQueue->m_top);
+
+            ct.queueIn  = (ct.queueIn+1)&1;
+            ct.queueOut = (ct.queueOut+1)&1;
         }
 
         DBG_QUERIES_END(queries);
@@ -226,35 +261,55 @@ namespace Reylax
 
     GLOBAL void TileKernel(u32 numRays, u32 tileOffset)
     {
-        // TODO should be filled from some other kernel
-        ct.pbQueues[0]->m_top = 1;
+        ct.curDepth = 0;
+        ct.rayPayload->m_top  = 0;
+        ct.pbQueues[0]->m_top = 0;
+        ct.pbQueues[1]->m_top = 0;
+        ct.leafQueues[1]->m_top = 0;
+        ct.leafQueues[0]->m_top = 0;
 
-        u32 depth = 0;
-        while ( ct.pbQueues[0]->m_top != 0 && depth < ct.maxDepth )
+        dim3 blocks  ((numRays + BLOCK_THREADS-1)/BLOCK_THREADS);
+        dim3 threads (BLOCK_THREADS);
+        RL_KERNEL_CALL( BLOCK_THREADS, blocks, threads, SetupRays, numRays, tileOffset );
+
+        // Only first time find hit point on main box from raybox trace
+        ct.queueIn  = 0;
+        ct.queueOut = 1;
+        RL_KERNEL_CALL( BLOCK_THREADS, blocks, threads, RayRootBoxKernel );
+        std::swap( ct.queueIn, ct.queueOut );
+
+        while ( ct.pbQueues[ct.queueIn]->m_top != 0 && ct.curDepth < ct.maxDepth )
         {
+            RL_KERNEL_CALL( BLOCK_THREADS, blocks, threads, ResetHitResults, numRays );
+
+            // Solve all intersections iteratively
             u32 numIters = 0;
-            while ( ct.pbQueues[0]->m_top != 0 )
+            while ( ct.pbQueues[ct.queueIn]->m_top != 0 )
             {
                 // Iterate Point-box queries until queues are empty
                 ct.leafQueues[0]->m_top = 0;
-                DoQueries("Point-box", numRays, ct.pbQueues, ct.leafQueues[0]);
+                DoQueries("Point-box", numRays, ct.pbQueues, ct.leafQueues[0], PointBoxKernel);
 
                 // Iterate Ray/leaf queries until queues are empty
                 ct.pbQueues[0]->m_top = 0;
-                DoQueries("Ray-leaf", numRays, ct.leafQueues, ct.pbQueues[0]);
+                ct.queueIn  = 0;
+                ct.queueOut = 1;
+                DoQueries("Ray-leaf", numRays, ct.leafQueues, ct.pbQueues[0], RayLeafKernel);
 
                 ++numIters;
             } // End while there are still point-box queries
-        //    printf("-- Num iters for a single tile %d --\n", numIters );
+            printf("-- Num iters for a single tile %d --\n", numIters );
 
             // TODO: For now, for each ray in tile, execute hit result (whether it was hit or not)
             dim3 blocks  ((numRays + BLOCK_THREADS-1)/BLOCK_THREADS);
             dim3 threads (BLOCK_THREADS);
-            RL_KERNEL_CALL(BLOCK_THREADS, blocks, threads, HitCallbackKernel, numRays, tileOffset, depth);
-
-            depth++;
+            ct.queueIn  = 0;
+            ct.queueOut = 1;
+            ct.pbQueues[0]->m_top = 0;
+            RL_KERNEL_CALL(BLOCK_THREADS, blocks, threads, HitCallbackKernel, numRays, tileOffset);
+            
+            ++ct.curDepth;
         }
-
     }
 
 }

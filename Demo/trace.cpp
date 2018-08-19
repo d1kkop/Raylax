@@ -17,7 +17,7 @@ void SetSymbol(T& dst, const void* src, bool wait=false)
     else         err = cudaMemcpyToSymbol(dst, src, sizeof(T), 0, cudaMemcpyDefault);
     assert(err==0);
 #else
-    memcpy(dst, src, sizeof(T));
+    memcpy(&dst, src, sizeof(T));
 #endif
 }
 
@@ -28,11 +28,9 @@ void UpdateTraceData(const TraceData& td, QueueRayFptr queueRayFptr)
     if ( firstTime )
     {
         firstTime=false;
-        cudaError err = ::cudaMemcpyToSymbolAsync( QueueRayFunc, &queueRayFptr, sizeof(QueueRayFptr), 0, cudaMemcpyHostToDevice);
-        assert( err == 0 );
-        SetSymbol( QueueRayFunc, &queueRayFptr, sizeof(QueueRayFptr) );
+        SetSymbol( QueueRayFunc, &queueRayFptr );
     }
-    SetSymbol( TD, &td, sizeof(TraceData) );
+    SetSymbol( TD, &td );
 }
 
 HOST_OR_DEVICE vec3 interpolate3(const HitResult& hit, const MeshData* meshData, u32 dataIdx)
@@ -52,8 +50,7 @@ HOST_OR_DEVICE vec3 interpolate3(const HitResult& hit, const MeshData* meshData,
 
 HOST_OR_DEVICE void FirstRays(u32 globalId, u32 localId)
 {
-    u32 id   = globalId + localId;
-    vec3 dir = TD.orient * TD.rayDirs[id];
+    vec3 dir = TD.orient * TD.rayDirs[globalId];
     vec3 ori = TD.eye;
     QueueRayFunc( localId, &ori.x, &dir.x ); 
 }
