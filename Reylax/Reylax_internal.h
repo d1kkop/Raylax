@@ -58,16 +58,11 @@ namespace Reylax
 
     struct Profiler
     {
+        double m_interval=2000;
+        bool m_show=true;
         double m_start;
         std::vector<std::pair<std::string, double>> m_items;
-        double m_interval;
-        bool m_show;
 
-        Profiler():
-            m_show(true),
-            m_interval(2000)
-        {
-        }
         void setInterval(u32 ms) { m_interval = ms; }
         void beginProfile() { static double t=time(); double tn=time(); if ( (tn-t)>m_interval ) { m_show=true; t=tn; } }
         void start() { if(!m_show) return; m_start = time(); }

@@ -18,12 +18,8 @@ namespace Reylax
     }
 
     Tracer::Tracer(u32 numRaysPerTile, u32 maxRecursionDepth):
-        m_numRaysPerTile(numRaysPerTile),
-        m_rayQueue(nullptr),
-        m_rayBuffer(nullptr),
-        m_hitResults(nullptr)
+        m_numRaysPerTile(numRaysPerTile)
     {
-        memset(&m_ctx, 0, sizeof(TracerContext));
         m_ctx.maxDepth = maxRecursionDepth;
 
         for ( u32 i=0; i<2; i++ )

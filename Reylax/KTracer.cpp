@@ -49,7 +49,7 @@ namespace Reylax
             ray->o = o;
             ray->d = d;
             ray->invd = invd;
-            ray->sign[0] = d.x > 0 ? 0 : 1;
+            ray->sign[0] = d.x > 0 ? 1 : 0;
             ray->sign[1] = d.y > 0 ? 1 : 0;
             ray->sign[2] = d.z > 0 ? 1 : 0;
             PointBox* pb = ct.pbQueues[0]->getNew(1);

@@ -12,18 +12,15 @@ namespace Reylax
 
     IMesh* IMesh::create()
     {
-        return new Mesh();
+        return new Mesh{};
     }
 
     // ------ Mesh ----------------------------------------------------------------------------------------
 
-    Mesh::Mesh()
-    {
-        memset(&d, 0, sizeof(MeshData));
-    }
-
     Mesh::~Mesh()
     {
+        delete [] d.indices;
+        for ( auto& vd : d.vertexData ) delete [] vd;
     }
 
     u32 Mesh::setVertexData(const float* vertexData, u32 numVertices, u32 numComponents, u32 slotId)

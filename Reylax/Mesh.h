@@ -8,8 +8,7 @@ namespace Reylax
     class Mesh: public IMesh
     {
     public:
-        Mesh();
-        ~Mesh();
+        virtual ~Mesh();
 
         u32 setVertexData(const float* data, u32 numVertices, u32 numComponents, u32 slotId) override;
         u32 setIndices(const u32* indices, u32 numIndices) override;

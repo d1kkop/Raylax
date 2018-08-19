@@ -7,9 +7,9 @@ using namespace chrono;
 // For now only CUDA implementation. 
 // Perhaps OpenCL, later too.
 
-uint4 cpu_blockDim;
-uint4 cpu_threadIdx;
-uint4 cpu_blockIdx;
+uint4 cpu_blockDim{};
+uint4 cpu_threadIdx{};
+uint4 cpu_blockIdx{};
 
 namespace Reylax
 {
@@ -27,7 +27,9 @@ namespace Reylax
 
     void syncDevice()
     {
+    #if RL_CUDA
         RL_CUDA_CALL(cudaDeviceSynchronize());
+    #endif
     }
 
     double time()

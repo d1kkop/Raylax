@@ -8,7 +8,6 @@ namespace Reylax
 
     struct GpuStaticMesh
     {
-        GpuStaticMesh();
         ~GpuStaticMesh();
         DeviceBuffer* d; // interpetable as MeshData on gpu
         DeviceBuffer* indices;
@@ -17,7 +16,6 @@ namespace Reylax
 
     struct GpuStaticScene: public IGpuStaticScene
     {
-        GpuStaticScene();
         virtual ~GpuStaticScene();
         DeviceBuffer* m_bvhTree;
         DeviceBuffer* m_faces;

@@ -9,12 +9,6 @@ namespace Reylax
 {
     // ------ GpuStaticMesh ----------------------------------------------------------------------------------------
 
-    GpuStaticMesh::GpuStaticMesh():
-        d(nullptr),
-        indices(nullptr)
-    {
-        for ( auto& vd : vertexDatas) vd = nullptr;
-    }
 
     GpuStaticMesh::~GpuStaticMesh()
     {
@@ -44,7 +38,7 @@ namespace Reylax
         }
 
         // Create gpu static scene.
-        GpuStaticScene* gpuScene = new GpuStaticScene();
+        GpuStaticScene* gpuScene = new GpuStaticScene{};
 
         // Build BVH.
         u32 err = BvhNode::build(mds.data(), (u32)mds.size(),
@@ -62,7 +56,7 @@ namespace Reylax
         }
 
         // Convert cpu meshes to gpu versions and make an array of meshPtrs to access them from index 0 to x.
-        gpuScene->m_gpuMeshes = new GpuStaticMesh[numMeshes];
+        gpuScene->m_gpuMeshes = new GpuStaticMesh[numMeshes]{};
         for ( u32 i=0; i<numMeshes; ++i )
         {
             const Mesh* m = static_cast<const Mesh*>(meshes[i]);
@@ -102,16 +96,6 @@ namespace Reylax
         gpuScene->m_meshDataPtrs->copyFrom(meshPtrs, true);
         delete [] meshPtrs;
         return gpuScene;
-    }
-
-    GpuStaticScene::GpuStaticScene():
-        m_bvhTree(nullptr),
-        m_faces(nullptr),
-        m_faceClusters(nullptr),
-        m_sides(nullptr),
-        m_meshDataPtrs(nullptr),
-        m_gpuMeshes(nullptr)
-    {
     }
 
     GpuStaticScene::~GpuStaticScene()

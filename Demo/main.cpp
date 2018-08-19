@@ -29,7 +29,7 @@ extern HOST_OR_DEVICE void TraceCallback(u32 globalId, u32 localId, u32 depth, c
 struct Profiler
 {
     double m_start;
-    vector<pair<string,double>> m_items;
+    vector<pair<string, double>> m_items;
 
     void start() { m_start = Time(); }
     void stop(string name) { m_items.emplace_back(name, Time()-m_start); }
@@ -48,16 +48,8 @@ struct Program
     bool  loopDone;
     float camPan;
     float camPitch;
-    vec3  camPos;
-    TraceData td;
-
-    Program()
-    {
-        loopDone=false;
-        camPan=0;
-        camPitch=0;
-        camPos = vec3(0,0,-2.5f);
-    }
+    vec3  camPos = vec3(0,0,-2.5f);
+    TraceData td{};
 
     void update(Profiler& pr)
     {
@@ -65,7 +57,7 @@ struct Program
         vec3 move(0);
         float speed = .3f;
         float mspeed = 0.004f;
-        static bool kds[6] ={ false, false, false, false };
+        static bool kds[6] = {};
         while ( SDL_PollEvent(&event) )
         {
             switch ( event.type )
@@ -205,7 +197,6 @@ vec3* createPrimaryRays(u32 width, u32 height, float left, float right, float to
 }
 
 
-
 int main(int argc, char** argv)
 {
     const char* winTitle = DEMO_NAME;
@@ -232,10 +223,10 @@ int main(int argc, char** argv)
     if ( !glRt->init(width, height) ) return -1;
     if ( !glRenderer->init(width, height) ) return -1;
 
-    IRenderTarget* rt;
-    IDeviceBuffer* primaryRays;
-    IGpuStaticScene* scene;
-    ITracer* tracer;
+    IRenderTarget* rt{};
+    IDeviceBuffer* primaryRays{};
+    IGpuStaticScene* scene{};
+    ITracer* tracer{};
     vector<IMesh*> meshes;
 
     // Create render target from a OpenGL texture buffer object
@@ -265,8 +256,8 @@ int main(int argc, char** argv)
     tracer = ITracer::create();
 
     // Update loop
-    Program p;
-    Profiler pr;
+    Program p{};
+    Profiler pr{};
     rt->lock();
     double tBegin = Time();
     u32 numFrames = 0;
