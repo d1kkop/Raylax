@@ -80,7 +80,7 @@ namespace Reylax
                     gm->vertexDatas[i]->copyFrom( md->vertexData[i], false );
                     ptrAsValue = gm->vertexDatas[i]->ptr<float>();
                 }
-                else gm->vertexDatas[i] = nullptr;
+                else { gm->vertexDatas[i] = nullptr; };
                 COPY_VALUE_TO_DEVICE_ASYNC(gm->d, ptrAsValue, MeshData, vertexData[i], sizeof(float*));
             }
         }
@@ -105,6 +105,6 @@ namespace Reylax
         delete m_faceClusters;
         delete m_sides;
         delete m_meshDataPtrs;
-        delete m_gpuMeshes;
+        delete [] m_gpuMeshes;
     }
 }

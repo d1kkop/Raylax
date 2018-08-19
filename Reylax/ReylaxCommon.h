@@ -260,8 +260,7 @@ namespace Reylax
         //tOut   = bEval? zDist : xDist;
         //offset = bEval? 4 : offset;
         //side   = bEval? 2 : side;
-        return 0;
-        //return links[offset + sign[spAxis]];
+        return links[offset + sign[spAxis]];
     }
 
     FDEVICE INLINE bool AABBOverlap(const vec3& tMin, const vec3& tMax, const vec3& bMin, const vec3& bMax)
