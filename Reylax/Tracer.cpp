@@ -122,17 +122,17 @@ namespace Reylax
         const Face* faces               = scn->m_faces->ptr<const Face>();
         const FaceCluster* faceClusters = scn->m_faceClusters->ptr<const FaceCluster>();
         const u32* sides                = scn->m_sides->ptr<const u32>();
-        MeshData** meshData             = scn->m_meshDataPtrs->ptr<MeshData*>();
+        MeshData** meshDataPtrs         = scn->m_meshDataPtrs->ptr<MeshData*>();
 
-        m_ctx.setupCb = setupCb;
-        m_ctx.hitCb = hitCb;
-        m_ctx.bMin = scn->bMin;
-        m_ctx.bMax = scn->bMax;
-        m_ctx.bvhNodes = bvhNodes;
-        m_ctx.faces = faces;
-        m_ctx.faceClusters = faceClusters;
-        m_ctx.sides = sides;
-        m_ctx.meshData = meshData;
+        m_ctx.setupCb               = setupCb;
+        m_ctx.hitCb                 = hitCb;
+        m_ctx.bMin                  = scn->bMin;
+        m_ctx.bMax                  = scn->bMax;
+        m_ctx.bvhNodes              = bvhNodes;
+        m_ctx.faces                 = faces;
+        m_ctx.faceClusters          = faceClusters;
+        m_ctx.sides                 = sides;
+        m_ctx.meshDataPtrs          = meshDataPtrs;
         UpdateTraceContext( m_ctx, false );
 
         m_profiler.beginProfile();

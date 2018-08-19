@@ -150,7 +150,7 @@ namespace Reylax
         const Face* faces;
         const FaceCluster* faceClusters;
         const u32* sides;
-        const MeshData* const* meshData;
+        const MeshData* const* meshDataPtrs;
         // -- Changes every kernel run 0, to 1 ---
         u32 queueIn, queueOut;
         // Output
@@ -196,11 +196,11 @@ namespace Reylax
                 (dot(v0v2, qvec)*invDet)));
     }
 
-    FDEVICE INLINE float FaceRayIntersect(const Face* face, const vec3& eye, const vec3& dir, const MeshData* const* meshData, float& u, float& v)
+    FDEVICE INLINE float FaceRayIntersect(const Face* face, const vec3& eye, const vec3& dir, const MeshData* const* meshPtrs, float& u, float& v)
     {
-        assert(meshData);
-        const MeshData* mesh = meshData[face->w];
-        const vec3* vp = (vec3*)mesh->vertexData[VERTEX_DATA_POSITION];
+        assert(meshPtrs);
+        const MeshData* mesh = meshPtrs[face->w];
+        const vec3* vp = (const vec3*)mesh->vertexData[VERTEX_DATA_POSITION];
         assert(mesh->vertexDataSizes[VERTEX_DATA_POSITION] == 3);
         return TriIntersect(eye, dir, vp[face->x], vp[face->y], vp[face->z], u, v);
     }
@@ -221,9 +221,10 @@ namespace Reylax
     FDEVICE INLINE u32 SelectNextBox(const vec3* bounds, const u32* links, const char* sign, 
                                      const vec3& p, const vec3& rinvd, float& tOut)
     {
-        float xDist = (bounds[sign[0]].x - p.x) * rinvd.x;
-        float yDist = (bounds[sign[1]].y - p.y) * rinvd.y;
-        float zDist = (bounds[sign[2]].z - p.z) * rinvd.z;
+        float xDist = abs((bounds[sign[0]].x - p.x) * rinvd.x);
+        float yDist = abs((bounds[sign[1]].y - p.y) * rinvd.y);
+        float zDist = abs((bounds[sign[2]].z - p.z) * rinvd.z);
+        assert( xDist >= 0 && yDist >= 0 && zDist >= 0 );
 
         // assume xDist being the smallest
         u32 offset = 0;
@@ -231,7 +232,7 @@ namespace Reylax
         tOut = xDist;
 
         // check if yDist > xDist
-        if ( yDist < xDist )
+        if ( yDist < tOut )
         {
             tOut   = yDist;
             offset = 2;
@@ -243,7 +244,7 @@ namespace Reylax
         //side   = bEval? 1 : 0;
 
         // check if zDist < xDist, note: xDist was updated if yDist was smaller
-        if ( zDist < xDist )
+        if ( zDist < tOut )
         {
             tOut   = zDist;
             offset = 4;

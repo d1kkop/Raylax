@@ -12,7 +12,7 @@ namespace Reylax
 {
     // -------- BvhNode -------------------------------------------------------------------------------------------------
 
-    u32 BvhNode::build(const MeshData** meshData, u32 numMeshDatas,
+    u32 BvhNode::build(const MeshData** meshPtrs, u32 numMeshDatas,
                        DeviceBuffer** ppBvhTree,
                        DeviceBuffer** ppFaces,
                        DeviceBuffer** ppFaceClusters,
@@ -20,7 +20,7 @@ namespace Reylax
                        vec3& worldMin,
                        vec3& worldMax)
     {
-        if ( !meshData || numMeshDatas == 0 || !ppBvhTree || !ppFaces || !ppFaceClusters || !ppSides )
+        if ( !meshPtrs || numMeshDatas == 0 || !ppBvhTree || !ppFaces || !ppFaceClusters || !ppSides )
         {
             return ERROR_INVALID_PARAMETER;
         }
@@ -37,7 +37,7 @@ namespace Reylax
 
         // push first faces on stack and approximate face count to allocate
         u32 allocatedFaceCount = 0;
-        forEachFace(meshData, numMeshDatas, [&](u32 mId, const u32 id[3], const vec3 v[3])
+        forEachFace(meshPtrs, numMeshDatas, [&](u32 mId, const u32 id[3], const vec3 v[3])
         {
             Face f;
             f.x = id[0];
@@ -82,7 +82,7 @@ namespace Reylax
         i32 top=0;
 
         // set bbox of first stack node
-        determineBbox(st->faces, meshData, st->bMin, st->bMax);
+        determineBbox(st->faces, meshPtrs, st->bMin, st->bMax);
         worldMin = st->bMin;
         worldMax = st->bMax;
 
@@ -177,7 +177,7 @@ namespace Reylax
                 vector<Face> facesL, facesR;
                 for ( auto& f : st->faces )
                 {
-                    const vec3* vd  = (const vec3*)(meshData[f.w])->vertexData[VERTEX_DATA_POSITION];
+                    const vec3* vd  = (const vec3*)(meshPtrs[f.w])->vertexData[VERTEX_DATA_POSITION];
                     const vec3 v[3] = { vd[f.x], vd[f.y], vd[f.z] };
                     if ( rlTriBoxOverlap(&cpL.x, &hsL.x, v) == 1 ) facesL.push_back(f);
                     if ( rlTriBoxOverlap(&cpR.x, &hsR.x, v) == 1 ) facesR.push_back(f);
@@ -245,12 +245,12 @@ namespace Reylax
                 sst = &sstack[++top];
                 sst->node = BVH_GET_INDEX(node->right);
                 memcpy( sst->indices, oldSides, sizeof(u32)*6 );
-                sst->indices[spAxis*2+1] = node->left;
+                sst->indices[ spAxis*2 ] = node->left;
                 // left
                 sst = &sstack[++top];
                 sst->node = node->left;
                 memcpy( sst->indices, oldSides, sizeof(u32)*6 );
-                sst->indices[ spAxis*2 ] = BVH_GET_INDEX( node->right ); // spAxis also stored in right
+                sst->indices[ spAxis*2+1 ] = BVH_GET_INDEX( node->right ); // spAxis also stored in right
             }
         }
 
@@ -303,7 +303,7 @@ namespace Reylax
         for ( auto& f : faces )
         {
             const vec3* vd  = (const vec3*)(meshData[f.w])->vertexData[VERTEX_DATA_POSITION];
-            const vec3 v[3] ={ vd[f.x], vd[f.y], vd[f.z] };
+            const vec3 v[3] = { vd[f.x], vd[f.y], vd[f.z] };
             for ( auto& vi: v )
             {
                 centre += vi;
@@ -312,14 +312,14 @@ namespace Reylax
         centre /= faces.size()*3;
     }
 
-    void BvhNode::determineBbox(vector<Face>& faces, const MeshData** meshData, vec3& bMin, vec3& bMax)
+    void BvhNode::determineBbox(vector<Face>& faces, const MeshData** meshPtrs, vec3& bMin, vec3& bMax)
     {
         bMin = vec3(FLT_MAX);
         bMax = vec3(FLT_MIN);
         for ( auto& f : faces )
         {
-            const vec3* vd  = (const vec3*)(meshData[f.w])->vertexData[VERTEX_DATA_POSITION];
-            const vec3 v[3] ={ vd[f.x], vd[f.y], vd[f.z] };
+            const vec3* vd  = (const vec3*)(meshPtrs[f.w])->vertexData[VERTEX_DATA_POSITION];
+            const vec3 v[3] = { vd[f.x], vd[f.y], vd[f.z] };
             for ( auto& vi: v )
             {
                 bMin = _min<vec3>(bMin, vi);

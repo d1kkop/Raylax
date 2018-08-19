@@ -33,12 +33,12 @@ void UpdateTraceData(const TraceData& td, QueueRayFptr queueRayFptr)
     SetSymbol( TD, &td );
 }
 
-HOST_OR_DEVICE vec3 interpolate3(const HitResult& hit, const MeshData* meshData, u32 dataIdx)
+HOST_OR_DEVICE vec3 interpolate3(const HitResult& hit, const MeshData* const* meshPtrs, u32 dataIdx)
 {
     assert(meshData);
     assert(dataIdx < VERTEX_DATA_COUNT);
-    const MeshData* mesh = &meshData[hit.face->w];
-    const vec3* vd  = (const vec3*) mesh->vertexData[dataIdx];
+    const MeshData* mesh = meshPtrs[hit.face->w];
+    const vec3* vd  = (const vec3*) (mesh->vertexData[dataIdx]);
     const vec3& vd1 = vd[hit.face->x];
     const vec3& vd2 = vd[hit.face->y];
     const vec3& vd3 = vd[hit.face->z];
@@ -59,8 +59,11 @@ HOST_OR_DEVICE void TraceCallback(u32 globalId, u32 localId, u32 depth,
                                   const HitResult& hit,
                                   const MeshData* const* meshPtrs)
 {
- //   auto mesh = meshPtrs[ hit.face->w ];
-  //  vec3 n = interpolate3( hit, mesh, VERTEX_DATA_NORMAL );
+    vec3 n = interpolate3( hit, meshPtrs, VERTEX_DATA_NORMAL );
+    n = normalize( n );
 //    vec3 refl = reflect( hit.rd, n );
-    TD.pixels[ globalId ] = 200<<8;
+    u32 r = (u32) (abs(n.z)*255.f);
+    // if ( r< 0) r = 0;
+    if ( r> 255) r = 255;
+    TD.pixels[ globalId ] = r<<8;
 }

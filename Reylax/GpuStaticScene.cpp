@@ -93,10 +93,11 @@ namespace Reylax
 
         // Build mesh ptrs for accessing vertex data ultimately at the face level.
         gpuScene->m_meshDataPtrs = new DeviceBuffer(sizeof(MeshData*)*numMeshes);
-        MeshData** meshPtrs      = new MeshData*[numMeshes];
+        MeshData** meshPtrs      = new MeshData*[numMeshes]; // host data to hold array of device ptrs
         for ( u32 i=0; i<numMeshes; ++i )
         {
-            meshPtrs[i] = gpuScene->m_gpuMeshes[i].d->ptr<MeshData>();
+            MeshData* dPtr = gpuScene->m_gpuMeshes[i].d->ptr<MeshData>();
+            meshPtrs[i] = dPtr;
         }
         gpuScene->m_meshDataPtrs->copyFrom(meshPtrs, true);
         delete [] meshPtrs;

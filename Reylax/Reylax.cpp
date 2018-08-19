@@ -39,10 +39,12 @@ namespace Reylax
     {
         for (u32 i = 0; i < numMeshDatas ; i++)
         {
-            const vec3* vd = (const vec3*)md[i]->vertexData[ VERTEX_DATA_POSITION ];
-            for ( u32 j=0; j<md[i]->numIndices; j+=3 )
+            auto* m = md[i];
+            const vec3* vd = (const vec3*)m->vertexData[ VERTEX_DATA_POSITION ];
+            const u32* ind = m->indices;
+            for ( u32 j=0; j<m->numIndices; j+=3 )
             {
-                const u32 id[3] = { md[i]->indices[j+0], md[i]->indices[j+1], md[i]->indices[j+2] };
+                const u32 id[3] = { ind[j], ind[j+1], ind[j+2] };
                 const vec3 v[3] = { vd[id[0]], vd[id[1]], vd[id[2]] };
                 cb( i, id, v );
             }

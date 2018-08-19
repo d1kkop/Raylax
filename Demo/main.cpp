@@ -108,7 +108,7 @@ struct Program
         mat4 yaw   = glm::rotate(camPan, vec3(0.f, 1.f, 0.f));
         mat4 pitch = glm::rotate(camPitch, vec3(1.f, 0.f, 0.f));
         mat3 orient = (yaw * pitch);
-   //     camPos += orient*move;
+        camPos += orient*move;
         if ( kds[4] ) camPos.y += speed;
         if ( kds[5] ) camPos.y -= speed;
     }
@@ -157,8 +157,8 @@ struct Program
             {
                 mat4 yaw   = rotate(camPan, vec3(0.f, 1.f, 0.f));
                 mat4 pitch = rotate(camPitch, vec3(1.f, 0.f, 0.f));
-          //      mat3 orient = (yaw * pitch);
-                mat3 orient(1);
+                mat3 orient = (yaw * pitch);
+          //      mat3 orient(1);
                 td.eye    = camPos;
                 td.orient = orient;
                 td.pixels = rt->buffer<u32>();
@@ -205,34 +205,9 @@ vec3* createPrimaryRays(u32 width, u32 height, float left, float right, float to
 }
 
 
-template <class T> T _min(T a, T b) { return a<b?a:b; }
-template <class T> T _max(T a, T b) { return a>b?a:b; }
-template <> vec3 _min(vec3 a, vec3 b) { return vec3(_min<float>(a.x, b.x), _min<float>(a.y, b.y), _min<float>(a.z, b.z)); }
-template <> vec3 _max(vec3 a, vec3 b) { return vec3(_max<float>(a.x, b.x), _max<float>(a.y, b.y), _max<float>(a.z, b.z)); }
-
-float temp_BoxRayIntersect(const vec3& bMin, const vec3& bMax, const vec3& orig, const vec3& invDir)
-{
-    vec3 tMin  = (bMin - orig) * invDir;
-    vec3 tMax  = (bMax - orig) * invDir;
-    vec3 oMin  = _min(tMin, tMax);
-    vec3 oMax  = _max(tMin, tMax);
-    float dmin = _max(oMin.x, _max(oMin.y, oMin.z));
-    float dmax = _min(oMax.x, _min(oMax.y, oMax.z));
-    float dist = _max(0.f, dmin);
-    return (dmax >= dmin ? dist : FLT_MAX);
-}
 
 int main(int argc, char** argv)
 {
-    vec3 bMin(-1);
-    vec3 bMax(1);
-    vec3 o(1.001f,0.2f,1.0f-0.01f);
-    vec3 d(-1.001f,0,1);
-    d = normalize(d);
-    vec3 invd(1.f/d.x, 1.f/d.y, 1.f/d.z);
-
-    float kDist = temp_BoxRayIntersect( bMin, bMax, o, invd );
-
     const char* winTitle = DEMO_NAME;
     const int width  = SCREEN_WIDTH;
     const int height = SCREEN_HEIGHT;
@@ -249,6 +224,7 @@ int main(int argc, char** argv)
     sdl_renderer  = SDL_CreateRenderer(sdl_window, -1, SDL_RENDERER_ACCELERATED);
     sdl_glContext = SDL_GL_CreateContext(sdl_window);
     SDL_CALL(SDL_GL_MakeCurrent(sdl_window, sdl_glContext));
+    SDL_CALL(SDL_SetRelativeMouseMode(SDL_TRUE));
 
     // GL interop with Cuda. We want our filled framebuffer to be blitted to the backbuffer without copy to host memory.
     GLTextureBufferObject* glRt=new GLTextureBufferObject();
@@ -278,7 +254,7 @@ int main(int argc, char** argv)
 
     // Set up primary rays of a pinhole camera in local space
     {
-        vec3* rays = createPrimaryRays(width, height, -1, 1, 1, -1, 1);
+        vec3* rays  = createPrimaryRays(width, height, -1, 1, 1, -1, 1);
         primaryRays = IDeviceBuffer::create( sizeof(vec3)*width*height );
         assert(primaryRays);
         primaryRays->copyFrom(rays, true); // await the transfer to complete before deletion of rays in host memory

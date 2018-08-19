@@ -50,10 +50,10 @@ namespace Reylax
             ray->d = d;
             ray->invd = invd;
             ray->sign[0] = d.x > 0 ? 0 : 1;
-            ray->sign[1] = d.y > 0 ? 0 : 1;
-            ray->sign[2] = d.z > 0 ? 0 : 1;
+            ray->sign[1] = d.y > 0 ? 1 : 0;
+            ray->sign[2] = d.z > 0 ? 1 : 0;
             PointBox* pb = ct.pbQueues[0]->getNew(1);
-            pb->point    = ray->o + (kDist+MARCH_EPSILON)*d;
+            pb->point    = o + (kDist+MARCH_EPSILON)*d;
             pb->localId  = bIdx.x * bDim.x + tIdx.x;
             pb->node     = 0;
             pb->ray      = (u32)(ray - ct.rayPayload->m_elements);
@@ -82,7 +82,7 @@ namespace Reylax
         else
         {
             // both must be valid
-            assert(RL_VALID_INDEX(BVH_GET_INDEX(node->left)) && RL_VALID_INDEX(BVH_GET_INDEX(node->right)));
+            assert(RL_VALID_INDEX(node->left) && RL_VALID_INDEX(BVH_GET_INDEX(node->right)));
             PointBox* pbNew = ct.pbQueues[ct.queueOut]->getNew(1);
             pbNew->localId  = pb->localId;
             pbNew->point    = pb->point;
@@ -90,7 +90,7 @@ namespace Reylax
             const BvhNode* nodeT = ct.bvhNodes + node->left;
             if ( PointInAABB(pb->point, nodeT->bMin, nodeT->bMax) )
             {
-                pbNew->node = BVH_GET_INDEX( node->left );
+                pbNew->node = node->left;
             }
             else
             {
@@ -115,7 +115,7 @@ namespace Reylax
 
         u32 numFaces = node->numFaces();
         u32 faceIdx  = leaf->faceIdx;
-        u32 loopCnt  = numFaces; // TODO  _min(numFaces - faceIdx, 4U);  // Change this to reduce number of writes back to global memory at the cost of more idling threads.
+        u32 loopCnt  = _min(numFaces - faceIdx, 4U);  // Change this to reduce number of writes back to global memory at the cost of more idling threads.
 
         HitResult* result = ct.hitResults + leaf->localId;
         float fDist = result->dist;
@@ -132,7 +132,7 @@ namespace Reylax
         {
             const Face* face = faces + node->getFace(fclusters, faceIdx);
             float u, v;
-            float dist = FaceRayIntersect(face, o, d, ct.meshData, u, v);
+            float dist = FaceRayIntersect(face, o, d, ct.meshDataPtrs, u, v);
             if ( dist < fDist )
             {
                 fU = u;
@@ -173,12 +173,11 @@ namespace Reylax
         }
         else // If no faces left to process, march ray to next box
         {
-            //const vec3* bounds  = &node->bMin;
-            const vec3 bounds[]       = { node->bMax, node->bMin };
-            u32 sideIdx         = node->right; // No need to do GET_INDEX as no spAxis is stored in leaf_right
+            const vec3* bounds  = &node->bMin;
+            u32 sideIdx         = node->right; // No need to do GET_INDEX as no spAxis is stored in leaf node
             vec3 invd           = ray->invd;
             const char* signs   = ray->sign;
-            float distToBox = 0.f;
+            float distToBox = FLT_MAX;
             u32 nextBoxId   = SelectNextBox( bounds, ct.sides + sideIdx*6, signs, o, invd, distToBox );
             if ( nextBoxId != RL_INVALID_INDEX && result->dist > distToBox )
             {
@@ -215,7 +214,7 @@ namespace Reylax
         u32 globalId = tileOffset + localId;
         const HitResult& hit = ct.hitResults[localId];
         Ray* ray = ct.rayPayload->get( hit.ray );
-        ct.hitCb( globalId, localId, ct.curDepth, hit, ct.meshData );
+        ct.hitCb( globalId, localId, ct.curDepth, hit, ct.meshDataPtrs );
     }
 
     template <class QIn, class Qout, class Func>
