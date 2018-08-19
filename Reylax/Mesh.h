@@ -19,6 +19,6 @@ namespace Reylax
         float* vertexData(u32 idx) const { return d.vertexData[idx]; }
         u32 vertexDataSize(u32 idx) const { return d.vertexDataSizes[idx]; }
 
-        MeshData d;
+        MeshData d{};
     };
 }

@@ -59,25 +59,25 @@ namespace Reylax
         gpuScene->m_gpuMeshes = new GpuStaticMesh[numMeshes]{};
         for ( u32 i=0; i<numMeshes; ++i )
         {
-            const Mesh* m = static_cast<const Mesh*>(meshes[i]);
-            GpuStaticMesh* gm = &gpuScene->m_gpuMeshes[i];
+            const MeshData* md = mds[i];
+            GpuStaticMesh* gm  = &gpuScene->m_gpuMeshes[i];
 
             gm->d = new DeviceBuffer(sizeof(MeshData));
-            gm->d->copyFrom(&m->d, false); // From this copy, the correct num indices/vertices and vertex data sizes are set. The valid ptrs are copied below.
+            gm->d->copyFrom(md, false); // From this copy, the correct num indices/vertices and vertex data sizes are set. The valid ptrs are copied below.
 
             // Gpu indices
-            gm->indices = new DeviceBuffer(sizeof(u32)*m->d.numIndices);
-            gm->indices->copyFrom(m->d.indices, false);
+            gm->indices = new DeviceBuffer(sizeof(u32)*md->numIndices);
+            gm->indices->copyFrom(md->indices, false);
             COPY_PTR_TO_DEVICE_ASYNC(gm->d, gm->indices, MeshData, indices);
 
             for ( u32 i=0; i<VERTEX_DATA_COUNT; ++i )
             {
                 float* ptrAsValue = nullptr;
-                if ( m->d.vertexData[i] )
+                if ( md->vertexData[i] )
                 {
-                    u32 numComponents  = m->d.vertexDataSizes[i];
-                    gm->vertexDatas[i] = new DeviceBuffer(sizeof(float)*numComponents*m->d.numVertices);
-                    gm->vertexDatas[i]->copyFrom( m->d.vertexData[i], false );
+                    u32 numComponents  = md->vertexDataSizes[i];
+                    gm->vertexDatas[i] = new DeviceBuffer(sizeof(float)*numComponents*md->numVertices);
+                    gm->vertexDatas[i]->copyFrom( md->vertexData[i], false );
                     ptrAsValue = gm->vertexDatas[i]->ptr<float>();
                 }
                 else gm->vertexDatas[i] = nullptr;
@@ -86,15 +86,15 @@ namespace Reylax
         }
 
         // Build mesh ptrs for accessing vertex data ultimately at the face level.
-        gpuScene->m_meshDataPtrs = new DeviceBuffer(sizeof(MeshData*)*numMeshes);
-        MeshData** meshPtrs      = new MeshData*[numMeshes]; // host data to hold array of device ptrs
+        gpuScene->m_meshDataPtrs  = new DeviceBuffer(sizeof(MeshData*)*numMeshes);
+        MeshData** deviceMeshPtrs = new MeshData*[numMeshes]; // host data to hold array of device ptrs
         for ( u32 i=0; i<numMeshes; ++i )
         {
             MeshData* dPtr = gpuScene->m_gpuMeshes[i].d->ptr<MeshData>();
-            meshPtrs[i] = dPtr;
+            deviceMeshPtrs[i] = dPtr;
         }
-        gpuScene->m_meshDataPtrs->copyFrom(meshPtrs, true);
-        delete [] meshPtrs;
+        gpuScene->m_meshDataPtrs->copyFrom( deviceMeshPtrs, true);
+        delete [] deviceMeshPtrs;
         return gpuScene;
     }
 

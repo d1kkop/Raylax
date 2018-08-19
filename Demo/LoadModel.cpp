@@ -40,19 +40,19 @@ bool LoadModel(const std::string& name, vector<IMesh*>& meshes)
         return false;
     }
     // Now we can access the file's contents.
-    u32 totalVertices =0;
-    u32 totalFaces =0;
+    u32 totalVertices{};
+    u32 totalFaces{};
     vec3 bMin(FLT_MAX);
     vec3 bMax(FLT_MIN);
     for (u32 i = 0; i < scene->mNumMeshes ; i++)
     {
         const aiMesh* aiMesh = scene->mMeshes[i];
-        auto* rlMesh = Reylax::IMesh::create();
+        auto* rlMesh = IMesh::create();
         meshes.push_back( rlMesh );
         totalVertices += aiMesh->mNumVertices;
         totalFaces += aiMesh->mNumFaces;
         u32 err=0;
-        // deform indices
+        // flatten indices and determin bounding box
         u32* indices = new u32[aiMesh->mNumFaces*3];
         for ( u32 i=0; i<aiMesh->mNumFaces; ++i )
         {
@@ -60,9 +60,9 @@ bool LoadModel(const std::string& name, vector<IMesh*>& meshes)
             indices[i*3+0] = aiMesh->mFaces[i].mIndices[0];
             indices[i*3+1] = aiMesh->mFaces[i].mIndices[1];
             indices[i*3+2] = aiMesh->mFaces[i].mIndices[2];
-            assert(indices[i*3+0]  < aiMesh->mNumVertices);
-            assert(indices[i*3+1]  < aiMesh->mNumVertices);
-            assert(indices[i*3+2]  < aiMesh->mNumVertices);
+            assert(indices[i*3+0] < aiMesh->mNumVertices);
+            assert(indices[i*3+1] < aiMesh->mNumVertices);
+            assert(indices[i*3+2] < aiMesh->mNumVertices);
             vec3 v[3] =
             {
                 *(vec3*)&aiMesh->mVertices[indices[i*3+0]],

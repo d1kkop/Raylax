@@ -3,7 +3,7 @@
 #define BLOCK_THREADS 256
 #define NUM_RAYBOX_QUEUES 32
 #define NUM_LEAF_QUEUES 32
-#define MARCH_EPSILON 0.0001f
+#define MARCH_EPSILON 0.01f
 
 #define DBG_QUERIES 0
 

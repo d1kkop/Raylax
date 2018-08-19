@@ -170,6 +170,7 @@ namespace Reylax
         vec3 v0v2 = v2 - v0;
         vec3 pvec = cross(dir, v0v2);
         float det = dot(v0v1, pvec);
+        float invDet = 1.f/det;
 
         //#ifdef CULLING 
         //    // if the determinant is negative the triangle is backfacing
@@ -177,23 +178,28 @@ namespace Reylax
         //    if (det < kEpsilon) return FLT_MAX;
         //#else 
         //    // ray and triangle are parallel if det is close to 0
-        //    if (fabs(det) < kEpsilon) return FLT_MAX; 
+       //    if (fabs(det) < 0.00001f) return FLT_MAX; 
         //#endif 
         //    float invDet = 1.f / det; 
         // 
 
             // IF determinate is small or zero, invDet will be large or inifnity, in either case the the computations remain valid.
 
-        float invDet = 1.f/det;
         vec3 tvec = orig - v0;
-        vec3 qvec = cross(tvec, v0v1);
         u = dot(tvec, pvec) * invDet;
-        v = dot(dir, qvec) * invDet;
-        //   float dist = dot(v0v2, qvec) * invDet;
+        if ( u<0||u>1 ) return FLT_MAX;
 
+        vec3 qvec = cross(tvec, v0v1);
+        v = dot(dir, qvec) * invDet;
+        if ( v<0||v+u>1 ) return FLT_MAX;
+
+        float dist = dot(v0v2, qvec) * invDet;
+        return dist;
+
+/*
         return  (u<0||u>1 ? FLT_MAX :
                 (v<0||v+u>1 ? FLT_MAX :
-                (dot(v0v2, qvec)*invDet)));
+                (dot(v0v2, qvec)*invDet)));*/
     }
 
     FDEVICE INLINE float FaceRayIntersect(const Face* face, const vec3& eye, const vec3& dir, const MeshData* const* meshPtrs, float& u, float& v)
@@ -224,7 +230,7 @@ namespace Reylax
         float xDist = abs((bounds[sign[0]].x - p.x) * rinvd.x);
         float yDist = abs((bounds[sign[1]].y - p.y) * rinvd.y);
         float zDist = abs((bounds[sign[2]].z - p.z) * rinvd.z);
-        assert( xDist >= 0 && yDist >= 0 && zDist >= 0 );
+     //   assert( xDist >= 0 && yDist >= 0 && zDist >= 0 );
 
         // assume xDist being the smallest
         u32 offset = 0;
@@ -254,8 +260,8 @@ namespace Reylax
         //tOut   = bEval? zDist : xDist;
         //offset = bEval? 4 : offset;
         //side   = bEval? 2 : side;
-
-        return links[offset + sign[spAxis]];
+        return 0;
+        //return links[offset + sign[spAxis]];
     }
 
     FDEVICE INLINE bool AABBOverlap(const vec3& tMin, const vec3& tMax, const vec3& bMin, const vec3& bMax)

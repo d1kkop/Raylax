@@ -241,16 +241,23 @@ namespace Reylax
                 assert(spAxis==0 || spAxis==1 || spAxis==2);
                 u32 oldSides[6];
                 memcpy( oldSides, sst->indices, sizeof(u32)*6 );
+                
                 // right
                 sst = &sstack[++top];
                 sst->node = BVH_GET_INDEX(node->right);
                 memcpy( sst->indices, oldSides, sizeof(u32)*6 );
                 sst->indices[ spAxis*2 ] = node->left;
+                //printf("Indices Right\n");
+                //for ( auto& i : sst->indices ) printf("%d ", i );
+                //printf("\n");
                 // left
                 sst = &sstack[++top];
                 sst->node = node->left;
                 memcpy( sst->indices, oldSides, sizeof(u32)*6 );
                 sst->indices[ spAxis*2+1 ] = BVH_GET_INDEX( node->right ); // spAxis also stored in right
+                //printf("Indices Left\n");
+                //for ( auto& i : sst->indices ) printf("%d ", i );
+                //printf("\n");
             }
         }
 
