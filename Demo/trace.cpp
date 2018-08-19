@@ -52,15 +52,15 @@ HOST_OR_DEVICE void FirstRays(u32 globalId, u32 localId)
 {
     vec3 dir = TD.orient * TD.rayDirs[globalId];
     vec3 ori = TD.eye;
-    QueueRayFunc( localId, &ori.x, &dir.x ); 
+    QueueRayFunc( &ori.x, &dir.x ); 
 }
 
 HOST_OR_DEVICE void TraceCallback(u32 globalId, u32 localId, u32 depth,
                                   const HitResult& hit,
                                   const MeshData* const* meshPtrs)
 {
-    auto mesh = meshPtrs[ hit.face->w ];
-    vec3 n = interpolate3( hit, mesh, VERTEX_DATA_NORMAL );
+ //   auto mesh = meshPtrs[ hit.face->w ];
+  //  vec3 n = interpolate3( hit, mesh, VERTEX_DATA_NORMAL );
 //    vec3 refl = reflect( hit.rd, n );
     TD.pixels[ globalId ] = 200<<8;
 }

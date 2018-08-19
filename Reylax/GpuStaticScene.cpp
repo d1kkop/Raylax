@@ -9,16 +9,18 @@ namespace Reylax
 {
     // ------ GpuStaticMesh ----------------------------------------------------------------------------------------
 
-    GpuStaticMesh::GpuStaticMesh()
+    GpuStaticMesh::GpuStaticMesh():
+        d(nullptr),
+        indices(nullptr)
     {
-        memset(this, 0, sizeof(this));
+        for ( auto& vd : vertexDatas) vd = nullptr;
     }
 
     GpuStaticMesh::~GpuStaticMesh()
     {
         delete d;
         delete indices;
-        for ( auto& d : vertexDatas ) delete d;
+        for ( auto& vd : vertexDatas ) delete vd;
     }
 
     // ------ GpuStaticScene ----------------------------------------------------------------------------------------
@@ -76,13 +78,16 @@ namespace Reylax
 
             for ( u32 i=0; i<VERTEX_DATA_COUNT; ++i )
             {
+                float* ptrAsValue = nullptr;
                 if ( m->d.vertexData[i] )
                 {
                     u32 numComponents  = m->d.vertexDataSizes[i];
                     gm->vertexDatas[i] = new DeviceBuffer(sizeof(float)*numComponents*m->d.numVertices);
                     gm->vertexDatas[i]->copyFrom( m->d.vertexData[i], false );
-                    COPY_PTR_TO_DEVICE_ASYNC(gm->d, gm->vertexDatas[i], MeshData, vertexData[i]);
+                    ptrAsValue = gm->vertexDatas[i]->ptr<float>();
                 }
+                else gm->vertexDatas[i] = nullptr;
+                COPY_VALUE_TO_DEVICE_ASYNC(gm->d, ptrAsValue, MeshData, vertexData[i], sizeof(float*));
             }
         }
 
@@ -93,8 +98,7 @@ namespace Reylax
         {
             meshPtrs[i] = gpuScene->m_gpuMeshes[i].d->ptr<MeshData>();
         }
-        gpuScene->m_meshDataPtrs->copyFrom(meshPtrs, false);
-        syncDevice(); // Await copies to be finished before deleting host memory
+        gpuScene->m_meshDataPtrs->copyFrom(meshPtrs, true);
         delete [] meshPtrs;
         return gpuScene;
     }

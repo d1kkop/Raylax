@@ -200,7 +200,7 @@ namespace Reylax
     {
         assert(meshData);
         const MeshData* mesh = meshData[face->w];
-        vec3* vp = (vec3*)mesh->vertexData[VERTEX_DATA_POSITION];
+        const vec3* vp = (vec3*)mesh->vertexData[VERTEX_DATA_POSITION];
         assert(mesh->vertexDataSizes[VERTEX_DATA_POSITION] == 3);
         return TriIntersect(eye, dir, vp[face->x], vp[face->y], vp[face->z], u, v);
     }
@@ -233,15 +233,27 @@ namespace Reylax
 
         // check if yDist > xDist
         bEval  = yDist < xDist;
-        xDist  = bEval? yDist : xDist;
-        offset = bEval? 2 : 0;
-        side   = bEval? 1 : 0;
+        if ( bEval )
+        {
+            xDist  = yDist;
+            offset = 2;
+            side = 1;
+        }
+        //xDist  = bEval? yDist : xDist;
+        //offset = bEval? 2 : 0;
+        //side   = bEval? 1 : 0;
 
         // check if zDist < xDist, note: xDist was updated if yDist was smaller
         bEval  = zDist < xDist;
-        tOut   = bEval? zDist : xDist;
-        offset = bEval? 4 : offset;
-        side   = bEval? 2 : side;
+        if ( bEval )
+        {
+            tOut = zDist;
+            offset = 4;
+            side = 2;
+        } else tOut = xDist;
+        //tOut   = bEval? zDist : xDist;
+        //offset = bEval? 4 : offset;
+        //side   = bEval? 2 : side;
 
         return links[offset + sign[side]];
     }

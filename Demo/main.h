@@ -30,6 +30,10 @@
 #define HOST_OR_DEVICE
 #endif
 
+#define DEMO_NAME "RayDemo"
+#define SCREEN_WIDTH 1920
+#define SCREEN_HEIGHT 1080
+
 using namespace glm;
 using namespace Reylax;
 

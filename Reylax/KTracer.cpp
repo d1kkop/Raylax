@@ -3,7 +3,7 @@
 #define BLOCK_THREADS 256
 #define NUM_RAYBOX_QUEUES 32
 #define NUM_LEAF_QUEUES 32
-#define MARCH_EPSILON 0.001f
+#define MARCH_EPSILON 0.0001f
 
 #define DBG_QUERIES 0
 
@@ -29,48 +29,36 @@ namespace Reylax
         SetSymbol( ct, &newCt );
     }
 
+    FDEVICE void gridSync()
+    {
+    #if RL_CUDA
+        cudaDeviceSynchronize();
+    #endif
+    }
+
     DEVICE void QueueRay(const float* ori3, const float* dir3)
     {
-        Ray* ray = ct.rayPayload->getNew(1);
+        // Only if we hit root box of tree, an intersection can take place.
+        vec3 o = *(vec3*)ori3;
         vec3 d = *(vec3*)dir3;
-        ray->o = *(vec3*)ori3;
-        ray->d = d;
-        ray->invd    = vec3(1.f/d.x, 1.f/d.y, 1.f/d.z);
-        ray->sign[0] = d.x > 0 ? 0 : 1;
-        ray->sign[1] = d.y > 0 ? 0 : 1;
-        ray->sign[2] = d.z > 0 ? 0 : 1;
-        PointBox* pb = ct.pbQueues[0]->getNew(1);
-        pb->point    = *(vec3*)ori3;
-        pb->ray      = (u32)(ray - ct.rayPayload->m_elements);
-        // localId and node are set from RayRootBoxKernel see below on first iteration
-        if ( ct.curDepth != 0 )
-        {
-            pb->localId  = bIdx.x * bDim.x + tIdx.x;
-            pb->node     = 0;
-        }
-    }
-
-    GLOBAL void RayRootBoxKernel()
-    {
-        u32 i = bIdx.x * bDim.x + tIdx.x;
-        if ( i >= ct.pbQueues[ct.queueIn]->m_top ) return;
-        PointBox* pb = ct.pbQueues[ct.queueIn]->get(i);
-        Ray* ray     = ct.rayPayload->get(pb->ray);
-        //if ( i == 128*256+128 )
-        //{
-        //    int j = 0;
-        //}
-        float kDist  = BoxRayIntersect( ct.bMin, ct.bMax, pb->point, ray->invd );
+        vec3 invd   = vec3(1.f/d.x, 1.f/d.y, 1.f/d.z);
+        float kDist = BoxRayIntersect(ct.bMin, ct.bMax, o, invd);
         if ( kDist != FLT_MAX )
         {
-            PointBox* pbNew = ct.pbQueues[ct.queueOut]->getNew(1);
-            pbNew->localId = pb->localId;
-            pbNew->node    = 0;
-            pbNew->ray     = pb->ray;
-            pbNew->point   = pb->point + (kDist+MARCH_EPSILON)*ray->d; // put point 'just' inside box
+            Ray* ray = ct.rayPayload->getNew(1);
+            ray->o = o;
+            ray->d = d;
+            ray->invd = invd;
+            ray->sign[0] = d.x > 0 ? 0 : 1;
+            ray->sign[1] = d.y > 0 ? 0 : 1;
+            ray->sign[2] = d.z > 0 ? 0 : 1;
+            PointBox* pb = ct.pbQueues[0]->getNew(1);
+            pb->point    = ray->o + (kDist+MARCH_EPSILON)*d;
+            pb->localId  = bIdx.x * bDim.x + tIdx.x;
+            pb->node     = 0;
+            pb->ray      = (u32)(ray - ct.rayPayload->m_elements);
         }
     }
-
 
     GLOBAL void PointBoxKernel()
     {
@@ -111,7 +99,6 @@ namespace Reylax
         }
     }
 
-
     GLOBAL void RayLeafKernel()
     {
         u32 i = bIdx.x * bDim.x + tIdx.x;
@@ -128,7 +115,7 @@ namespace Reylax
 
         u32 numFaces = node->numFaces();
         u32 faceIdx  = leaf->faceIdx;
-        u32 loopCnt  = _min(numFaces - faceIdx, 4U);  // Change this to reduce number of writes back to global memory at the cost of more idling threads.
+        u32 loopCnt  = numFaces; // TODO  _min(numFaces - faceIdx, 4U);  // Change this to reduce number of writes back to global memory at the cost of more idling threads.
 
         HitResult* result = ct.hitResults + leaf->localId;
         float fDist = result->dist;
@@ -194,7 +181,7 @@ namespace Reylax
             float distToBox = 0.f;
             u32 nextBoxId   = SelectNextBox( bounds, ct.sides + sideIdx*6, signs, o, invd, distToBox );
 
-            if (nextBoxId != RL_INVALID_INDEX && result->dist > distToBox )
+            if ( nextBoxId != RL_INVALID_INDEX && result->dist > distToBox )
             {
                 PointBox* pb    = ct.pbQueues[0]->getNew(1);
                 pb->localId     = leaf->localId;
@@ -234,6 +221,10 @@ namespace Reylax
     template <class QIn, class Qout, class Func>
     DEVICE void DoQueries(const char* queries, u32 numRays, Store<QIn>** queryQueues, Store<Qout>* remainderQueue, Func f)
     {
+        ct.queueIn  = 0;
+        ct.queueOut = 1;
+        remainderQueue->m_top = 0;
+
         DBG_QUERIES_BEGIN(queries);
 
         // if no queries left to solve, quit
@@ -248,7 +239,7 @@ namespace Reylax
             dim3 blocks  ((queryQueues[ct.queueIn]->m_top + BLOCK_THREADS-1)/BLOCK_THREADS);
             dim3 threads (BLOCK_THREADS);
             RL_KERNEL_CALL(BLOCK_THREADS, blocks, threads, f);
-            // cudaDeviceSynchronize();
+            gridSync();
 
             DBG_QUERIES_OUT(queryQueues[ct.queueOut]->m_top, remainderQueue->m_top);
 
@@ -264,36 +255,25 @@ namespace Reylax
         ct.curDepth = 0;
         ct.rayPayload->m_top  = 0;
         ct.pbQueues[0]->m_top = 0;
-        ct.pbQueues[1]->m_top = 0;
-        ct.leafQueues[1]->m_top = 0;
-        ct.leafQueues[0]->m_top = 0;
 
         dim3 blocks  ((numRays + BLOCK_THREADS-1)/BLOCK_THREADS);
         dim3 threads (BLOCK_THREADS);
         RL_KERNEL_CALL( BLOCK_THREADS, blocks, threads, SetupRays, numRays, tileOffset );
-
-        // Only first time find hit point on main box from raybox trace
-        ct.queueIn  = 0;
-        ct.queueOut = 1;
-        RL_KERNEL_CALL( BLOCK_THREADS, blocks, threads, RayRootBoxKernel );
-        std::swap( ct.queueIn, ct.queueOut );
+        gridSync();
 
         while ( ct.pbQueues[ct.queueIn]->m_top != 0 && ct.curDepth < ct.maxDepth )
         {
             RL_KERNEL_CALL( BLOCK_THREADS, blocks, threads, ResetHitResults, numRays );
+            gridSync();
 
             // Solve all intersections iteratively
             u32 numIters = 0;
             while ( ct.pbQueues[ct.queueIn]->m_top != 0 )
             {
                 // Iterate Point-box queries until queues are empty
-                ct.leafQueues[0]->m_top = 0;
                 DoQueries("Point-box", numRays, ct.pbQueues, ct.leafQueues[0], PointBoxKernel);
 
                 // Iterate Ray/leaf queries until queues are empty
-                ct.pbQueues[0]->m_top = 0;
-                ct.queueIn  = 0;
-                ct.queueOut = 1;
                 DoQueries("Ray-leaf", numRays, ct.leafQueues, ct.pbQueues[0], RayLeafKernel);
 
                 ++numIters;
@@ -307,6 +287,7 @@ namespace Reylax
             ct.queueOut = 1;
             ct.pbQueues[0]->m_top = 0;
             RL_KERNEL_CALL(BLOCK_THREADS, blocks, threads, HitCallbackKernel, numRays, tileOffset);
+            gridSync();
             
             ++ct.curDepth;
         }

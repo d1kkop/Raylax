@@ -233,9 +233,9 @@ int main(int argc, char** argv)
 
     float kDist = temp_BoxRayIntersect( bMin, bMax, o, invd );
 
-    const char* winTitle = "ReylaxTest";
-    int width  = 256;
-    int height = 256;
+    const char* winTitle = DEMO_NAME;
+    const int width  = SCREEN_WIDTH;
+    const int height = SCREEN_HEIGHT;
 
     setDevice( getNumDevices()-1 );
 

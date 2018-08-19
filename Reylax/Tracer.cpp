@@ -8,7 +8,7 @@ using namespace std;
 namespace Reylax
 {
     GLOBAL void TileKernel(u32 numRays, u32 tileOffset);
-    DEVICE void QueueRay(u32 localId, const float* ori, const float* dir);
+    DEVICE void QueueRay(const float* ori, const float* dir);
     extern void UpdateTraceContext(const TracerContext& ct, bool wait);
 
 
