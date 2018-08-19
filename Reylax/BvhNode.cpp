@@ -92,6 +92,7 @@ namespace Reylax
             st = &stack[top--];
 
             // bbox of new node is now determined
+            assert(nodeIndexer+1 < numNodes);
             BvhNode*node = nodes + nodeIndexer++;
             node->bMin   = st->bMin;
             node->bMax   = st->bMax;
@@ -157,7 +158,7 @@ namespace Reylax
                 // NOTE: Cannot take centre as 'midpoint' as it might be outside the bbox due to triangles overlapping the boundaries.
             //    vec3 centre;
             //    determineCentre( st->faces, meshData, centre );
-                float s = (node->bMax[splitAxis]+node->bMin[splitAxis])*.5f;// centre[splitAxis];
+                float s = (st->bMax[splitAxis]+st->bMin[splitAxis])*.5f;// centre[splitAxis];
             //    float lowerBound = node->bMin[splitAxis] + hs[splitAxis] * 0.1f;
             //    float upperBound = node->bMax[splitAxis] - hs[splitAxis] * 0.1f;
             //    s = _max( s, lowerBound );
@@ -211,16 +212,6 @@ namespace Reylax
             } // split
         } // while
 
-        // setup device memory
-        *ppBvhTree = new DeviceBuffer( sizeof(BvhNode) * nodeIndexer );
-        *ppFaces   = new DeviceBuffer( sizeof(Face) * faceIndexer );
-        *ppFaceClusters = new DeviceBuffer( sizeof(FaceCluster) * faceClusterIndexer );
-        *ppSides   = new DeviceBuffer( sizeof(u32)*6*faceClusterIndexer );
-
-        (*ppBvhTree)->copyFrom( nodes, false );
-        (*ppFaces)->copyFrom( faces, false );
-        (*ppFaceClusters)->copyFrom( fc, false );
-
         // Sides of leafs can now be determine as index of every node is known.
         u32* sides_data = new u32[faceClusterIndexer*6];
         struct sideStack
@@ -245,7 +236,9 @@ namespace Reylax
             }
             else
             {
+                assert( top + 2 < 64 );
                 u32 spAxis = BVH_GET_AXIS( node->right );
+                assert(spAxis==0 || spAxis==1 || spAxis==2);
                 u32 oldSides[6];
                 memcpy( oldSides, sst->indices, sizeof(u32)*6 );
                 // right
@@ -255,11 +248,21 @@ namespace Reylax
                 sst->indices[spAxis*2+1] = node->left;
                 // left
                 sst = &sstack[++top];
-                sst->node = BVH_GET_INDEX(node->left);
+                sst->node = node->left;
                 memcpy( sst->indices, oldSides, sizeof(u32)*6 );
                 sst->indices[ spAxis*2 ] = BVH_GET_INDEX( node->right ); // spAxis also stored in right
             }
         }
+
+        // setup device memory
+        *ppBvhTree = new DeviceBuffer(sizeof(BvhNode) * nodeIndexer);
+        *ppFaces   = new DeviceBuffer(sizeof(Face) * faceIndexer);
+        *ppFaceClusters = new DeviceBuffer(sizeof(FaceCluster) * faceClusterIndexer);
+        *ppSides   = new DeviceBuffer(sizeof(u32)*6*faceClusterIndexer);
+
+        (*ppBvhTree)->copyFrom(nodes, false);
+        (*ppFaces)->copyFrom(faces, false);
+        (*ppFaceClusters)->copyFrom(fc, false);
         (*ppSides)->copyFrom( sides_data, false );
 
         // statistics

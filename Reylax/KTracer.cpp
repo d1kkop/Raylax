@@ -173,16 +173,16 @@ namespace Reylax
         }
         else // If no faces left to process, march ray to next box
         {
-            const vec3* bounds  = &node->bMin;
+            //const vec3* bounds  = &node->bMin;
+            const vec3 bounds[]       = { node->bMax, node->bMin };
             u32 sideIdx         = node->right; // No need to do GET_INDEX as no spAxis is stored in leaf_right
             vec3 invd           = ray->invd;
             const char* signs   = ray->sign;
-            
             float distToBox = 0.f;
             u32 nextBoxId   = SelectNextBox( bounds, ct.sides + sideIdx*6, signs, o, invd, distToBox );
-
             if ( nextBoxId != RL_INVALID_INDEX && result->dist > distToBox )
             {
+         //       printf("NextBoxId %d\n", nextBoxId);
                 PointBox* pb    = ct.pbQueues[0]->getNew(1);
                 pb->localId     = leaf->localId;
                 pb->point       = o + d*(distToBox+MARCH_EPSILON); // TODO check epsilon
@@ -278,7 +278,7 @@ namespace Reylax
 
                 ++numIters;
             } // End while there are still point-box queries
-            printf("-- Num iters for a single tile %d --\n", numIters );
+      //      printf("-- Num iters for a single tile %d --\n", numIters );
 
             // TODO: For now, for each ray in tile, execute hit result (whether it was hit or not)
             dim3 blocks  ((numRays + BLOCK_THREADS-1)/BLOCK_THREADS);

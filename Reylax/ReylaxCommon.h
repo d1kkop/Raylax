@@ -214,7 +214,7 @@ namespace Reylax
         vec3 oMax  = _max(tMin, tMax);
         float dmin = _max(oMin.x,_max(oMin.y, oMin.z));
         float dmax = _min(oMax.x,_min(oMax.y, oMax.z));
-        float dist = _max(0.f, dmin);
+        float dist = dmin>0.f?dmin:dmax;
         return (dmax >= dmin ? dist : FLT_MAX);
     }
 
@@ -227,35 +227,34 @@ namespace Reylax
 
         // assume xDist being the smallest
         u32 offset = 0;
-        u32 side   = 0;
-
-        bool bEval;
+        u32 spAxis = 0;
+        tOut = xDist;
 
         // check if yDist > xDist
-        bEval  = yDist < xDist;
-        if ( bEval )
+        if ( yDist < xDist )
         {
-            xDist  = yDist;
+            tOut   = yDist;
             offset = 2;
-            side = 1;
+            spAxis = 1;
         }
+        // bool bEval  = yDist < xDist;
         //xDist  = bEval? yDist : xDist;
         //offset = bEval? 2 : 0;
         //side   = bEval? 1 : 0;
 
         // check if zDist < xDist, note: xDist was updated if yDist was smaller
-        bEval  = zDist < xDist;
-        if ( bEval )
+        if ( zDist < xDist )
         {
-            tOut = zDist;
+            tOut   = zDist;
             offset = 4;
-            side = 2;
-        } else tOut = xDist;
+            spAxis = 2;
+        }
+        // bEval  = zDist < xDist;
         //tOut   = bEval? zDist : xDist;
         //offset = bEval? 4 : offset;
         //side   = bEval? 2 : side;
 
-        return links[offset + sign[side]];
+        return links[offset + sign[spAxis]];
     }
 
     FDEVICE INLINE bool AABBOverlap(const vec3& tMin, const vec3& tMax, const vec3& bMin, const vec3& bMax)
