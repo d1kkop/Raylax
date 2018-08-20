@@ -83,6 +83,8 @@ namespace Reylax
 
         // set bbox of first stack node
         determineBbox(st->faces, meshPtrs, st->bMin, st->bMax);
+        st->bMin-=vec3(0.001f); // TODO <--- hmmm
+        st->bMax+=vec3(0.001f);
         worldMin = st->bMin;
         worldMax = st->bMax;
 
@@ -104,7 +106,7 @@ namespace Reylax
             if ( RL_VALID_INDEX(st->parentIdx) )
             {
                 BvhNode* parent = nodes + st->parentIdx;
-                if ( BVH_GET_INDEX(parent->left)==0 ) parent->left = nodeIndexer-1;
+                if ( parent->left==0 ) parent->left = nodeIndexer-1;
                 else
                 {
                     assert( BVH_GET_INDEX(parent->right)==0 );
@@ -144,7 +146,7 @@ namespace Reylax
             else
             {
                 u32 splitAxis = 0;
-                vec3 hs = (node->bMax-node->bMin)*.5f;
+                vec3 hs = (node->bMax - node->bMin)*.5f;
                 assert( hs.x>0.f && hs.y>0.f && hs.z>0.f );
 
                 float biggest = hs.x;
@@ -177,7 +179,7 @@ namespace Reylax
                 vector<Face> facesL, facesR;
                 for ( auto& f : st->faces )
                 {
-                    const vec3* vd  = (const vec3*)(meshPtrs[f.w])->vertexData[VERTEX_DATA_POSITION];
+                    const vec3* vd  = ( const vec3*)(meshPtrs[f.w] )->vertexData[VERTEX_DATA_POSITION];
                     const vec3 v[3] = { vd[f.x], vd[f.y], vd[f.z] };
                     if ( rlTriBoxOverlap(&cpL.x, &hsL.x, v) == 1 ) facesL.push_back(f);
                     if ( rlTriBoxOverlap(&cpR.x, &hsR.x, v) == 1 ) facesR.push_back(f);

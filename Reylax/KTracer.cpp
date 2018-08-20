@@ -3,7 +3,7 @@
 #define BLOCK_THREADS 256
 #define NUM_RAYBOX_QUEUES 32
 #define NUM_LEAF_QUEUES 32
-#define MARCH_EPSILON 0.0001f
+#define MARCH_EPSILON 0.01f
 
 #define DBG_QUERIES 0
 
@@ -77,9 +77,10 @@ namespace Reylax
                 rl->node    = pb->node;
                 rl->localId = pb->localId;
                 rl->ray     = pb->ray;
+                rl->point = pb->point; // TEMP
             }
         }
-        else
+        else if ( PointInAABB(pb->point, node->bMin, node->bMax) )
         {
             // both must be valid
             assert(RL_VALID_INDEX(node->left) && RL_VALID_INDEX(BVH_GET_INDEX(node->right)));
@@ -87,8 +88,11 @@ namespace Reylax
             pbNew->localId  = pb->localId;
             pbNew->point    = pb->point;
             pbNew->ray      = pb->ray;
-            const BvhNode* nodeT = ct.bvhNodes + node->left;
-            if ( PointInAABB(pb->point, nodeT->bMin, nodeT->bMax) )
+            u32 spAxis      = BVH_GET_AXIS(node->right);
+            float s         = (node->bMax[spAxis] + node->bMin[spAxis])*.5f;
+            if ( pb->point[spAxis] < s )
+            // const BvhNode* nodeT = ct.bvhNodes + node->left;
+            // if ( PointInAABB(pb->point, nodeT->bMin, nodeT->bMax) )
             {
                 pbNew->node = node->left;
             }
@@ -165,29 +169,37 @@ namespace Reylax
             u32 nodeIdx     = leaf->node;
             u32 rayIdx      = leaf->ray;
             u32 localId     = leaf->localId;
+            vec3 point      = leaf->point;
             leaf = ct.leafQueues[ct.queueOut]->getNew(1);
             leaf->faceIdx   = faceIdx;
             leaf->node      = nodeIdx;
             leaf->localId   = localId;
             leaf->ray       = rayIdx;
+            leaf->point = point; // TEMP
         }
         else // If no faces left to process, march ray to next box
         {
-            const vec3* bounds  = &node->bMin;
-            u32 sideIdx         = node->right; // No need to do GET_INDEX as no spAxis is stored in leaf node
-            vec3 invd           = ray->invd;
-            const char* signs   = ray->sign;
-            float distToBox = FLT_MAX;
-            u32 nextBoxId   = SelectNextBox( bounds, ct.sides + sideIdx*6, signs, o, invd, distToBox );
-            if ( nextBoxId != RL_INVALID_INDEX && result->dist > distToBox )
-            {
-         //       printf("NextBoxId %d\n", nextBoxId);
-                PointBox* pb    = ct.pbQueues[0]->getNew(1);
-                pb->localId     = leaf->localId;
-                pb->point       = o + d*(distToBox+MARCH_EPSILON); // TODO check epsilon
-                pb->node        = nextBoxId;
-                pb->ray         = leaf->ray;
-            }
+            PointBox* pb    = ct.pbQueues[0]->getNew(1);
+            pb->localId     = leaf->localId;
+            pb->point       = leaf->point + d*(0.1f+MARCH_EPSILON); // TODO check epsilon
+            pb->node        = 0;
+            pb->ray         = leaf->ray;
+
+         //   const vec3* bounds  = &node->bMin;
+         //   u32 sideIdx         = node->right; // No need to do GET_INDEX as no spAxis is stored in leaf node
+         //   vec3 invd           = ray->invd;
+         //   const char* signs   = ray->sign;
+         //   float distToBox = FLT_MAX;
+         //   u32 nextBoxId   = SelectNextBox( bounds, ct.sides + sideIdx*6, signs, o, invd, distToBox );
+         //   if ( nextBoxId != RL_INVALID_INDEX && result->dist > distToBox )
+         //   {
+         ////       printf("NextBoxId %d\n", nextBoxId);
+         //       PointBox* pb    = ct.pbQueues[0]->getNew(1);
+         //       pb->localId     = leaf->localId;
+         //       pb->point       = o + d*(distToBox+MARCH_EPSILON); // TODO check epsilon
+         //       pb->node        = nextBoxId;
+         //       pb->ray         = leaf->ray;
+         //   }
         }
     }
 
@@ -275,9 +287,10 @@ namespace Reylax
                 // Iterate Ray/leaf queries until queues are empty
                 DoQueries("Ray-leaf", numRays, ct.leafQueues, ct.pbQueues[0], RayLeafKernel);
 
-                ++numIters;
+                ct.queueIn = 0;
+                numIters++;
             } // End while there are still point-box queries
-      //      printf("-- Num iters for a single tile %d --\n", numIters );
+            printf("-- Num iters for a single tile %d --\n", numIters );
 
             // TODO: For now, for each ray in tile, execute hit result (whether it was hit or not)
             dim3 blocks  ((numRays + BLOCK_THREADS-1)/BLOCK_THREADS);

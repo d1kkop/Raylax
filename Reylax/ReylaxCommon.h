@@ -8,7 +8,7 @@
 
 #define BVH_MAX_DEPTH 64
 #define BVH_NUM_FACES_IN_LEAF 32
-#define BVH_DBG_INFO 0
+#define BVH_DBG_INFO 1
 
 #define BVH_ISLEAF( idx ) (((idx)>>31)==1)
 #define BVH_GETNUM_TRIANGLES(idx) ((idx)&0x7FFFFFF)
@@ -47,6 +47,7 @@ namespace Reylax
          u32 node;
          u32 faceIdx;
          u32 ray;
+         vec3 point;
      };
 
      __align__(4)
@@ -214,14 +215,25 @@ namespace Reylax
     // https://tavianator.com/fast-branchless-raybounding-box-intersections/
     FDEVICE INLINE float BoxRayIntersect(const vec3& bMin, const vec3& bMax, const vec3& orig, const vec3& invDir)
     {
-        vec3 tMin  = (bMin - orig) * invDir;
-        vec3 tMax  = (bMax - orig) * invDir;
-        vec3 oMin  = _min(tMin, tMax);
-        vec3 oMax  = _max(tMin, tMax);
-        float dmin = _max(oMin.x,_max(oMin.y, oMin.z));
-        float dmax = _min(oMax.x,_min(oMax.y, oMax.z));
-        float dist = dmin>0.f?dmin:dmax;
-        return (dmax >= dmin ? dist : FLT_MAX);
+        vec3 tMin   = (bMin - orig) * invDir;
+        vec3 tMax   = (bMax - orig) * invDir;
+        vec3 tMax2  = _max(tMin, tMax);
+        float ftmax = _min(tMax2.x, _min(tMax2.y, tMax2.z));
+        if ( ftmax < 0.f ) return FLT_MAX;
+        vec3 tMin2  = _min(tMin, tMax);
+        float ftmin = _max(tMin2.x, _max(tMin2.y, tMin2.z));
+        float dist  = _max(0.f, ftmin);
+        dist = (ftmax >= ftmin ? dist : FLT_MAX);
+        return dist;
+
+        //vec3 tMin  = (bMin - orig) * invDir;
+        //vec3 tMax  = (bMax - orig) * invDir;
+        //vec3 oMin  = _min(tMin, tMax);
+        //vec3 oMax  = _max(tMin, tMax);
+        //float dmin = _max(oMin.x,_max(oMin.y, oMin.z));
+        //float dmax = _min(oMax.x,_min(oMax.y, oMax.z));
+        //float dist = dmin>0.f?dmin:dmax;
+        //return (dmax >= dmin ? dist : FLT_MAX);
     }
 
     FDEVICE INLINE u32 SelectNextBox(const vec3* bounds, const u32* links, const char* sign, 
@@ -260,6 +272,7 @@ namespace Reylax
         //tOut   = bEval? zDist : xDist;
         //offset = bEval? 4 : offset;
         //side   = bEval? 2 : side;
+        return 0;
         return links[offset + sign[spAxis]];
     }
 

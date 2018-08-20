@@ -62,6 +62,13 @@ HOST_OR_DEVICE u32 rgba(const vec4& c)
     return (a<<24)|(r<<16)|(g<<8)|(b);
 }
 
+HOST_OR_DEVICE u32 single(float f)
+{
+    u32 r = (u32)(f*255.f);
+    if ( r > 255 ) r = 255;
+    return r;
+}
+
 HOST_OR_DEVICE void FirstRays(u32 globalId, u32 localId)
 {
     vec3 dir = TD.orient * TD.rayDirs[globalId];
@@ -73,6 +80,8 @@ HOST_OR_DEVICE void TraceCallback(u32 globalId, u32 localId, u32 depth,
                                   const HitResult& hit,
                                   const MeshData* const* meshPtrs)
 {
-    vec4 c = Interpolate<vec4>( hit, meshPtrs, VERTEX_DATA_EXTRA4 );
-    TD.pixels[ globalId ] = rgba( c );
+  //  vec4 c = Interpolate<vec4>( hit, meshPtrs, VERTEX_DATA_EXTRA4 );
+    vec3 n = Interpolate<vec3>( hit, meshPtrs, VERTEX_DATA_NORMAL );
+    n = normalize( n );
+    TD.pixels[ globalId ] = single( abs(n.z) ) << 16;
 }

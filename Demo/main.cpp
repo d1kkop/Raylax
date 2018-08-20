@@ -48,6 +48,8 @@ struct Program
     float camPan;
     float camPitch;
     vec3  camPos = vec3(0,0,-2.5f);
+    mat3  camOrient;
+    float kSpeed = 1.f;
     TraceData td;
 
     void update(Profiler& pr)
@@ -82,7 +84,12 @@ struct Program
 
             case SDL_MOUSEMOTION:
                 camPan += event.motion.xrel * mspeed;
-                camPitch += event.motion.yrel * mspeed;
+                camPitch += event.motion.yrel * -mspeed;
+                break;
+
+            case SDL_MOUSEBUTTONDOWN:
+                if ( event.button.button == 1 ) kSpeed *= 2;
+                if ( event.button.button == 3 ) kSpeed /= 2;
                 break;
 
             case SDL_QUIT:
@@ -91,6 +98,7 @@ struct Program
             }
         }
 
+        speed *= kSpeed;
         if ( kds[0] ) move.x -= speed;
         if ( kds[1] ) move.x += speed;
         if ( kds[2] ) move.z += speed;
@@ -98,8 +106,8 @@ struct Program
 
         mat4 yaw   = glm::rotate(camPan, vec3(0.f, 1.f, 0.f));
         mat4 pitch = glm::rotate(camPitch, vec3(1.f, 0.f, 0.f));
-        mat3 orient = (yaw * pitch);
-        camPos += orient*move;
+        camOrient  = (yaw * pitch);
+        camPos     += camOrient*move;
         if ( kds[4] ) camPos.y += speed;
         if ( kds[5] ) camPos.y -= speed;
     }
@@ -146,12 +154,8 @@ struct Program
         {
             pr.start();
             {
-                mat4 yaw   = rotate(camPan, vec3(0.f, 1.f, 0.f));
-                mat4 pitch = rotate(camPitch, vec3(1.f, 0.f, 0.f));
-                mat3 orient = (yaw * pitch);
-          //      mat3 orient(1);
                 td.eye    = camPos;
-                td.orient = orient;
+                td.orient = camOrient;
                 td.pixels = rt->buffer<u32>();
                 UpdateTraceData( td, tracer->getQueueRayAddress() );
                 err = tracer->trace( numRays, scene, FirstRays, TraceCallback );
@@ -235,47 +239,47 @@ int main(int argc, char** argv)
 
     // Load test model and use as 'scene'
     {
-        //if ( !LoadModel(R"(D:\_Programming\2018\RaytracerCuda\Content/f16.obj)", meshes) ) return -1;
-        //scene = IGpuStaticScene::create(meshes.data(), (u32)meshes.size());
-        //assert(scene);
-        //for ( auto& m : meshes ) delete m;  // all data is on device, safe to delete meshes in host memory
+        if ( !LoadModel(R"(D:\_Programming\2018\RaytracerCuda\Content/f16.obj)", meshes) ) return -1;
+        scene = IGpuStaticScene::create(meshes.data(), (u32)meshes.size());
+        assert(scene);
+        for ( auto& m : meshes ) delete m;  // all data is on device, safe to delete meshes in host memory
 
         
-        IMesh* mesh = IMesh::create();
-        vec3* vertices = new vec3[4];
-        vec3* normals  = new vec3[4];
-        vertices[0] = vec3(-1.f, -1.f, 1.56f);
-        vertices[1] = vec3(0.f, 1.f, 1.56f);
-        vertices[2] = vec3(1.f, -1.f, 1.56f);
-        vertices[3] = vec3(2.f, 1.f, 1.56f);
-        for ( int i=0; i<4; i++ ) normals[i] = vec3(0, 0, -1);
-        u32* indices = new u32[6];
-        indices[0]=0;
-        indices[1]=1;
-        indices[2]=2;
-        indices[3]=1;
-        indices[4]=2;
-        indices[5]=3;
-        vec4* colors = new vec4[4];
-        colors[0] = vec4(1.f, 0.f, 0.f, 1.f);
-        colors[1] = vec4(0.f, 1.f, 0.f, 1.f);
-        colors[2] = vec4(0.f, 0.f, 1.f, 1.f);
-        colors[3] = vec4(1.f, 1.f, 0.f, 1.f);
-        u32 err;
-        err = mesh->setIndices(indices, 6);
-        assert(err==0);
-        err = mesh->setVertexData((float*)vertices, 4, 3, VERTEX_DATA_POSITION);
-        assert(err==0);
-        err = mesh->setVertexData((float*)colors, 4, 4, VERTEX_DATA_EXTRA4);
-        assert(err==0);
-        err = mesh->setVertexData((float*)normals, 4, 3, VERTEX_DATA_NORMAL);
-        assert(err==0);
-        delete[] colors;
-        delete[] indices;
-        delete[] vertices;
-        delete[] normals;
-        scene = IGpuStaticScene::create( &mesh, 1 );
-        assert(scene);
+        //IMesh* mesh = IMesh::create();
+        //vec3* vertices = new vec3[4];
+        //vec3* normals  = new vec3[4];
+        //vertices[0] = vec3(-1.f, -1.f, 1.56f);
+        //vertices[1] = vec3(0.f, 1.f, 1.56f);
+        //vertices[2] = vec3(1.f, -1.f, 1.56f);
+        //vertices[3] = vec3(2.f, 1.f, 1.56f);
+        //for ( int i=0; i<4; i++ ) normals[i] = vec3(0, 0, -1);
+        //u32* indices = new u32[6];
+        //indices[0]=0;
+        //indices[1]=1;
+        //indices[2]=2;
+        //indices[3]=1;
+        //indices[4]=2;
+        //indices[5]=3;
+        //vec4* colors = new vec4[4];
+        //colors[0] = vec4(1.f, 0.f, 0.f, 1.f);
+        //colors[1] = vec4(0.f, 1.f, 0.f, 1.f);
+        //colors[2] = vec4(0.f, 0.f, 1.f, 1.f);
+        //colors[3] = vec4(1.f, 1.f, 0.f, 1.f);
+        //u32 err;
+        //err = mesh->setIndices(indices, 6);
+        //assert(err==0);
+        //err = mesh->setVertexData((float*)vertices, 4, 3, VERTEX_DATA_POSITION);
+        //assert(err==0);
+        //err = mesh->setVertexData((float*)colors, 4, 4, VERTEX_DATA_EXTRA4);
+        //assert(err==0);
+        //err = mesh->setVertexData((float*)normals, 4, 3, VERTEX_DATA_NORMAL);
+        //assert(err==0);
+        //delete[] colors;
+        //delete[] indices;
+        //delete[] vertices;
+        //delete[] normals;
+        //scene = IGpuStaticScene::create( &mesh, 1 );
+        //assert(scene);
 
     }
 
