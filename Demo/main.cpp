@@ -146,7 +146,7 @@ struct Program
                 err = rt->clear(255);
                 assert(err==0);
             }
-            syncDevice();
+            SyncDevice();
             pr.stop("Clear");
         }
 
@@ -161,7 +161,7 @@ struct Program
                 err = tracer->trace( numRays, scene, FirstRays, TraceCallback );
                 assert(err==0);
             }
-            syncDevice();
+            SyncDevice();
             pr.stop("Trace");
         }
 
@@ -175,7 +175,7 @@ struct Program
 
 
 // Setup camera directions in local space
-vec3* createPrimaryRays(u32 width, u32 height, float left, float right, float top, float bottom, float zoom)
+vec3* CreatePrimaryRays(u32 width, u32 height, float left, float right, float top, float bottom, float zoom)
 {
     assert(width*height!=0);
     float dx = (right-left) / width;
@@ -205,7 +205,7 @@ int main(int argc, char** argv)
     const int width  = SCREEN_WIDTH;
     const int height = SCREEN_HEIGHT;
 
-    setDevice( getNumDevices()-1 );
+    SetDevice( GetNumDevices()-1 );
 
     // Window management (SDL)
     SDL_Window*   sdl_window=nullptr;
@@ -285,7 +285,7 @@ int main(int argc, char** argv)
 
     // Set up primary rays of a pinhole camera in local space
     {
-        vec3* rays  = createPrimaryRays(width, height, -1, 1, 1, -1, 1);
+        vec3* rays  = CreatePrimaryRays(width, height, -1, 1, 1, -1, 1);
         primaryRays = IDeviceBuffer::create( sizeof(vec3)*width*height );
         assert(primaryRays);
         primaryRays->copyFrom(rays, true); // await the transfer to complete before deletion of rays in host memory

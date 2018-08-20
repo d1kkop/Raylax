@@ -88,7 +88,7 @@ namespace Reylax
         printf("\n--- End Tracer allocations ---\n\n");
 
         // Ensure all memory transfers are done
-        syncDevice();
+        SyncDevice();
     }
 
     Tracer::~Tracer()

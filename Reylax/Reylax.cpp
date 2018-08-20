@@ -13,19 +13,19 @@ uint4 cpu_blockIdx{};
 
 namespace Reylax
 {
-    void setDevice(u32 device)
+    void SetDevice(u32 device)
     {
         RL_CUDA_CALL(cudaSetDevice(device));
     }
 
-    u32 getNumDevices()
+    u32 GetNumDevices()
     {
         i32 count=0;
         RL_CUDA_CALL(cudaGetDeviceCount(&count));
         return count;
     }
 
-    void syncDevice()
+    void SyncDevice()
     {
     #if RL_CUDA
         RL_CUDA_CALL(cudaDeviceSynchronize());

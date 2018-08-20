@@ -274,7 +274,7 @@ namespace Reylax
     #endif
 
         // Ensure data is copied to device before deletion of host memory
-        syncDevice();
+        SyncDevice();
 
         // get rid of intermediate data
         delete[] nodes;
