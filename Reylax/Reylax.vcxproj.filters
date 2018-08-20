@@ -70,6 +70,9 @@
     <ClCompile Include="GpuStaticScene.cpp">
       <Filter>Core</Filter>
     </ClCompile>
+    <ClCompile Include="BvhNode2.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="RTClear.cpp">

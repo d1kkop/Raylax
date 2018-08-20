@@ -105,6 +105,14 @@ namespace Reylax
                           vec3& worldMin,
                           vec3& worldMax );
 
+        static u32 build2( const MeshData** meshData, u32 numMeshDatas,
+                           DeviceBuffer** ppBvhTree,
+                           DeviceBuffer** ppFaces,
+                           DeviceBuffer** ppFaceClusters,
+                           DeviceBuffer** ppSides,
+                           vec3& worldMin,
+                           vec3& worldMax );
+
         static void determineCentre(std::vector<Face>& faces, const MeshData** meshData, vec3& centre);
         static void determineBbox(std::vector<Face>& faces, const MeshData** meshData, vec3& bMin, vec3& bMax);
 

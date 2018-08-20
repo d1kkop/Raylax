@@ -172,6 +172,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="BoxTriangle.cpp" />
+    <ClCompile Include="BvhNode2.cpp" />
     <ClCompile Include="KTracer_old.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug_Fast|x64'">true</ExcludedFromBuild>
