@@ -280,7 +280,7 @@ namespace Reylax
         //tOut   = bEval? zDist : xDist;
         //offset = bEval? 4 : offset;
         //side   = bEval? 2 : side;
-        return 0;
+        //return 0;
         return links[offset + sign[spAxis]];
     }
 

@@ -3,7 +3,7 @@
 #define BLOCK_THREADS 256
 #define NUM_RAYBOX_QUEUES 32
 #define NUM_LEAF_QUEUES 32
-#define MARCH_EPSILON 0.01f
+#define MARCH_EPSILON 0.00001f
 
 #define DBG_QUERIES 0
 
@@ -119,7 +119,7 @@ namespace Reylax
 
         u32 numFaces = node->numFaces();
         u32 faceIdx  = leaf->faceIdx;
-        u32 loopCnt  = _min(numFaces - faceIdx, 4U);  // Change this to reduce number of writes back to global memory at the cost of more idling threads.
+        u32 loopCnt  = numFaces;// TODO _min(numFaces - faceIdx, 4U);  // Change this to reduce number of writes back to global memory at the cost of more idling threads.
 
         HitResult* result = ct.hitResults + leaf->localId;
         float fDist = result->dist;
@@ -179,27 +179,27 @@ namespace Reylax
         }
         else // If no faces left to process, march ray to next box
         {
-            PointBox* pb    = ct.pbQueues[0]->getNew(1);
-            pb->localId     = leaf->localId;
-            pb->point       = leaf->point + d*(0.1f+MARCH_EPSILON); // TODO check epsilon
-            pb->node        = 0;
-            pb->ray         = leaf->ray;
+            //PointBox* pb    = ct.pbQueues[0]->getNew(1);
+            //pb->localId     = leaf->localId;
+            //pb->point       = leaf->point + d*(0.1f+MARCH_EPSILON); // TODO check epsilon
+            //pb->node        = 0;
+            //pb->ray         = leaf->ray;
 
-         //   const vec3* bounds  = &node->bMin;
-         //   u32 sideIdx         = node->right; // No need to do GET_INDEX as no spAxis is stored in leaf node
-         //   vec3 invd           = ray->invd;
-         //   const char* signs   = ray->sign;
-         //   float distToBox = FLT_MAX;
-         //   u32 nextBoxId   = SelectNextBox( bounds, ct.sides + sideIdx*6, signs, o, invd, distToBox );
-         //   if ( nextBoxId != RL_INVALID_INDEX && result->dist > distToBox )
-         //   {
-         ////       printf("NextBoxId %d\n", nextBoxId);
-         //       PointBox* pb    = ct.pbQueues[0]->getNew(1);
-         //       pb->localId     = leaf->localId;
-         //       pb->point       = o + d*(distToBox+MARCH_EPSILON); // TODO check epsilon
-         //       pb->node        = nextBoxId;
-         //       pb->ray         = leaf->ray;
-         //   }
+            const vec3* bounds  = &node->bMin;
+            u32 sideIdx         = node->right; // No need to do GET_INDEX as no spAxis is stored in leaf node
+            vec3 invd           = ray->invd;
+            const char* signs   = ray->sign;
+            float distToBox = FLT_MAX;
+            u32 nextBoxId   = SelectNextBox( bounds, ct.sides + sideIdx*6, signs, o, invd, distToBox );
+            if ( nextBoxId != RL_INVALID_INDEX && result->dist > distToBox )
+            {
+         //       printf("NextBoxId %d\n", nextBoxId);
+                PointBox* pb    = ct.pbQueues[0]->getNew(1);
+                pb->localId     = leaf->localId;
+                pb->point       = o + d*(distToBox+MARCH_EPSILON); // TODO check epsilon
+                pb->node        = nextBoxId;
+                pb->ray         = leaf->ray;
+            }
         }
     }
 
