@@ -256,10 +256,12 @@ namespace Reylax
     FDEVICE u32 UpdateToSingleQueue(QIn& qIn, byte* id2Queue)
     {
         u32 qlength = qIn->updateToSingleQueue();
+    #if RL_USE_INNER_QUEUES
         dim3 blocks  ((qlength + BLOCK_THREADS-1)/BLOCK_THREADS);
         dim3 threads (BLOCK_THREADS);
         RL_KERNEL_CALL(BLOCK_THREADS, blocks, threads, UpdateToInnerQueueKernel, qlength, qIn, id2Queue);
         gridSync();
+    #endif
         return qlength;
     }
 

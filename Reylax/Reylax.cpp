@@ -4,8 +4,6 @@
 using namespace std;
 using namespace chrono;
 
-// For now only CUDA implementation. 
-// Perhaps OpenCL, later too.
 
 /*thread_local*/ uint4 cpu_blockDim{};
 thread_local uint4 cpu_threadIdx{};
@@ -68,17 +66,24 @@ namespace Reylax
             }
         }
     #else
-        concurrency::parallel_for<u32>(0, blocks.x, 1, [&](u32 idx)
+        concurrency::parallel_for<u32>(0, blocks.x*threads.x, 1, [&](u32 idx)
         {
-            /*for ( u32 b=idx; b <blocks.x; b++ )
-            {*/
-                bIdx.x = idx;
+            bIdx.x = idx>>8;
+            tIdx.x = idx-(bIdx.x<<8);
+            cb();
+            /*u32 bPart = blocks.x/4;
+            u32 b = idx*bPart;
+            u32 e = b+bPart;
+            if ( e > blocks.x ) e = blocks.x;
+            for ( ; b < e; ++b )
+            {
+                bIdx.x = b;
                 for ( u32 t=0; t<threads.x; t++ )
                 {
                     tIdx.x = t;
                     cb();
                 }
-            //}
+            }*/
         });
     #endif
     #endif

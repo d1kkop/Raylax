@@ -123,33 +123,60 @@ namespace Reylax
         T*  m_elements;
         u32 m_max;
         u32 m_partMax;
-        u32 m_offsets[RL_NUMMER_INNER_QUEUES];
-    #if RL_CUDA || !RL_CPU_MT
-        u32 m_top[RL_NUMMER_INNER_QUEUES];
-    #else
-        std::atomic<u32> m_top[RL_NUMMER_INNER_QUEUES];
-    #endif
 
+    #if RL_USE_INNER_QUEUES
+            u32 m_offsets[RL_NUMMER_INNER_QUEUES];
+        #if RL_CUDA || !RL_CPU_MT
+            u32 m_top[RL_NUMMER_INNER_QUEUES];
+        #else
+            std::atomic<u32> m_top[RL_NUMMER_INNER_QUEUES];
+        #endif
+    #else
+        #if RL_CUDA || !RL_CPU_MT
+            u32 m_top;
+        #else
+            std::atomic<u32> m_top;
+        #endif
+    #endif
 
         FDEVICE T* getNew(u32 idx, u32 cnt)
         {
-            u32 qIdx = idx&(RL_NUMMER_INNER_QUEUES-1);
-            
-        #if RL_CUDA || !RL_CPU_MT
-            u32 old = atomicAdd2<u32>(&m_top[qIdx], cnt);
-        #else
-            u32 old = atomicAdd2<std::atomic<u32>>(&m_top[qIdx], cnt);
-        #endif
-            assert(validate(old+cnt)); 
-         //   memset(m_elements + old, 0, sizeof(T)*cnt);
-            return m_elements + (qIdx*m_partMax)+old;
+    #if RL_USE_INNER_QUEUES
+            {
+                u32 qIdx = idx&(RL_NUMMER_INNER_QUEUES-1);
+
+            #if RL_CUDA || !RL_CPU_MT
+                u32 old = atomicAdd2<u32>(&m_top[qIdx], cnt);
+            #else
+                u32 old = atomicAdd2<std::atomic<u32>>(&m_top[qIdx], cnt);
+            #endif
+
+                assert(validate(old+cnt));
+                return m_elements + (qIdx*m_partMax)+old;
+            }
+    #else // -----------------------------------------------------------------------
+            {
+            #if RL_CUDA || !RL_CPU_MT
+                u32 old = atomicAdd2<u32>(&m_top, cnt);
+            #else
+                u32 old = atomicAdd2<std::atomic<u32>>(&m_top, cnt);
+            #endif
+
+                assert(validate(old+cnt));
+                return m_elements + old;
+            }
+     #endif
         }
 
         FDEVICE T* get(const byte* id2queue, u32 idx) const
         {
+        #if RL_USE_INNER_QUEUES
             i32 qIdx = id2queue[idx];
             assert(m_top[qIdx]<=m_partMax);
             return m_elements + qIdx*m_partMax + (idx-m_offsets[qIdx]);
+        #else
+            return getFromBase(idx);
+        #endif
         }
 
         FDEVICE T* getFromBase(u32 idx) const
@@ -160,22 +187,36 @@ namespace Reylax
 
         FDEVICE bool validate(u32 newTop) const
         {
-            if ( newTop > m_partMax ) printf("m_top = %d, _max = %d\n", newTop, m_partMax);
+        #if RL_USE_INNER_QUEUES
+            if ( newTop > m_partMax ) printf("m_top = %d, part_max = %d\n", newTop, m_partMax);
             return newTop <= m_partMax;
+        #else
+            if ( newTop > m_max ) printf("m_top = %d, total_max = %d\n", newTop, m_max);
+            return newTop <= m_max;
+        #endif
         }
 
         FDEVICE void resetTop()
         {
+        #if RL_USE_INNER_QUEUES
             for ( auto& t : m_top ) t=0;
+        #else
+            m_top = 0;
+        #endif
         }
 
         FDEVICE u32 getTop(u32 innerQueueIdx) const
         {
+        #if RL_USE_INNER_QUEUES
             return m_top[innerQueueIdx];
+        #else
+            return m_top;
+        #endif
         }
 
         FDEVICE u32 updateToSingleQueue()
         {
+        #if RL_USE_INNER_QUEUES
             u32 totalLength = 0;
             for ( u32 i=0; i<RL_NUMMER_INNER_QUEUES; ++i )
             {
@@ -183,6 +224,9 @@ namespace Reylax
                 totalLength += m_top[i];
             }
             return totalLength;
+        #else
+            return m_top;
+        #endif
         }
     };
 
