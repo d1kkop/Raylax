@@ -36,9 +36,11 @@ namespace Reylax
      struct PointBox
      {
          vec3 point;
+         vec3 d;
+         vec3 invd;
          u32 node;
          u32 localId;
-         u32 ray;
+         char sign[3];
      };
 
      __align__(4)

@@ -48,18 +48,15 @@ namespace Reylax
         float kDist = BoxRayIntersect(ct.bMin, ct.bMax, o, invd);
         if ( kDist != FLT_MAX )
         {
-            Ray* ray = ct.rayPayload->getNew(1);
-            ray->o = o;
-            ray->d = d;
-            ray->invd = invd;
-            ray->sign[0] = d.x > 0 ? 1 : 0;
-            ray->sign[1] = d.y > 0 ? 1 : 0;
-            ray->sign[2] = d.z > 0 ? 1 : 0;
             PointBox* pb = ct.pbQueues[0]->getNew(1);
             pb->point    = o + d*(kDist+MARCH_EPSILON);
             pb->localId  = bIdx.x * bDim.x + tIdx.x;
             pb->node     = 0;
-            pb->ray      = (u32)(ray - ct.rayPayload->m_elements);
+            pb->d = d;
+            pb->invd = invd;
+            pb->sign[0] = d.x > 0 ? 1 : 0;
+            pb->sign[1] = d.y > 0 ? 1 : 0;
+            pb->sign[2] = d.z > 0 ? 1 : 0;
         }
     }
 
@@ -83,17 +80,13 @@ namespace Reylax
             {
                 const vec3* bounds  = &node->bMin;
                 float distToBox = FLT_MAX;
-                vec3 pnt = pb->point;
-                Ray* ray = ct.rayPayload->get(pb->ray);
-                u32 nextBoxId   = SelectNextBox(bounds, ct.sides + node->right*6, ray->sign, pnt, ray->invd, distToBox);
+                u32 nextBoxId   = SelectNextBox(bounds, ct.sides + node->right*6, pb->sign, pb->point, pb->invd, distToBox);
                 if ( nextBoxId != RL_INVALID_INDEX )
                 {
-                    vec3 dir = ray->d;
                     PointBox* pbNew = ct.pbQueues[ct.queueOut]->getNew(1);
-                    pbNew->point    = pnt + dir*(distToBox+MARCH_EPSILON);
+                    *pbNew = *pb;
+                    pbNew->point    += pb->d*(distToBox+MARCH_EPSILON);
                     pbNew->node     = nextBoxId;
-                    pbNew->localId  = pb->localId;
-                    pbNew->ray      = pb->ray;
                 }
             }
         }
@@ -123,12 +116,11 @@ namespace Reylax
 
         RayLeaf* leaf    = ct.leafQueues[ct.queueIn]->get(i);
         const auto* node = ct.bvhNodes + leaf->pb.node;
-        const Ray*  ray  = ct.rayPayload->get(leaf->pb.ray);
 
         assert( node->isLeaf() );
 
         const vec3& pnt  = leaf->pb.point;
-        const vec3& dir  = ray->d;
+        const vec3& dir  = leaf->pb.d;
 
         u32 numFaces = node->numFaces();
         u32 faceIdx  = leaf->faceIdx;
@@ -167,14 +159,6 @@ namespace Reylax
             result->v = fV;
             result->dist = fDist;
             result->face = closestFace;
-            result->ray  = leaf->pb.ray;
-            vec3 ori = ray->o;
-        #pragma unroll
-            for ( u32 i=0; i<3; ++i )
-            {
-                result->ro[i] = ori[i];
-                result->rd[i] = dir[i];
-            }
         }
 
         // If there are still faces left to process, queue new Ray/Leaf item
@@ -189,14 +173,13 @@ namespace Reylax
         {
             const vec3* bounds  = &node->bMin;
             float distToBox = FLT_MAX;
-            u32 nextBoxId   = SelectNextBox( bounds, ct.sides + node->right*6, ray->sign, pnt, ray->invd, distToBox );
+            u32 nextBoxId   = SelectNextBox( bounds, ct.sides + node->right*6, leaf->pb.sign, leaf->pb.point, leaf->pb.invd, distToBox );
             if ( nextBoxId != RL_INVALID_INDEX && result->dist > distToBox )
             {
                 PointBox* pb    = ct.pbQueues[0]->getNew(1);
+                *pb = leaf->pb;
                 pb->point       = pnt + dir*(distToBox+MARCH_EPSILON);
                 pb->node        = nextBoxId;
-                pb->localId     = leaf->pb.localId;
-                pb->ray         = leaf->pb.ray;
             }
         }
     }

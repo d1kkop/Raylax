@@ -49,9 +49,6 @@ namespace Reylax
     {
         const Face* face;
         float dist, u, v;
-        float ro[3];
-        float rd[3];
-        u32 ray;
     };
 
 
