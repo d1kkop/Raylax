@@ -3,10 +3,11 @@
 
 namespace Reylax
 {
-    using i32 = __int32;
-    using i64 = __int64;
-    using u32 = unsigned __int32;
-    using u64 = unsigned __int64;
+    using byte = unsigned __int8;
+    using i32  = __int32;
+    using i64  = __int64;
+    using u32  = unsigned __int32;
+    using u64  = unsigned __int64;
 
     constexpr u32 VERTEX_DATA_POSITION      = 0;
     constexpr u32 VERTEX_DATA_NORMAL        = 1;

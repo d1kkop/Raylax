@@ -22,14 +22,6 @@ namespace Reylax
     {
         m_ctx.maxDepth = maxRecursionDepth;
 
-        for ( u32 i=0; i<2; i++ )
-        {
-            m_pointBoxQueue[i]  = nullptr;
-            m_pointBoxBuffer[i] = nullptr;
-            m_leafQueue[i]  = nullptr;
-            m_leafBuffer[i] = nullptr;
-        }
-
     #if RL_PRINT_STATS
         printf("\n--- Tracer allocations ---\n\n");
     #endif
@@ -56,18 +48,26 @@ namespace Reylax
 
         // Assign device buffers to queue elements ptr
         u32 zero=0;
+        u32 partMax = numQueries/RL_NUMMER_INNER_QUEUES;
+        assert( numQueries % RL_NUMMER_INNER_QUEUES == 0 );
         for ( u32 i=0; i<2; i++ )
         {
             COPY_PTR_TO_DEVICE_ASYNC(m_pointBoxQueue[i], m_pointBoxBuffer[i], Store<PointBox>, m_elements);
             COPY_VALUE_TO_DEVICE_ASYNC(m_pointBoxQueue[i], numQueries, Store<PointBox>, m_max, sizeof(u32));
             COPY_VALUE_TO_DEVICE_ASYNC(m_pointBoxQueue[i], zero, Store<PointBox>, m_top, sizeof(u32));
+            COPY_VALUE_TO_DEVICE_ASYNC(m_pointBoxQueue[i], partMax, Store<PointBox>, m_partMax, sizeof(u32));
             COPY_PTR_TO_DEVICE_ASYNC(m_leafQueue[i], m_leafBuffer[i], Store<RayLeaf>, m_elements);
             COPY_VALUE_TO_DEVICE_ASYNC(m_leafQueue[i], numQueries, Store<RayLeaf>, m_max, sizeof(u32));
             COPY_VALUE_TO_DEVICE_ASYNC(m_leafQueue[i], zero, Store<RayLeaf>, m_top, sizeof(u32));
+            COPY_VALUE_TO_DEVICE_ASYNC(m_leafQueue[i], partMax, Store<PointBox>, m_partMax, sizeof(u32));
         }
         COPY_PTR_TO_DEVICE_ASYNC(m_rayQueue, m_rayBuffer, Store<Ray>, m_elements);
         COPY_VALUE_TO_DEVICE_ASYNC(m_rayQueue, numQueries, Store<Ray>, m_max, sizeof(u32));
         COPY_VALUE_TO_DEVICE_ASYNC(m_rayQueue, zero, Store<Ray>, m_top, sizeof(u32));
+        COPY_VALUE_TO_DEVICE_ASYNC(m_rayQueue, partMax, Store<Ray>, m_partMax, sizeof(u32));
+
+        m_id2Queue = new DeviceBuffer(sizeof(char)*m_numRaysPerTile);
+      //  m_id2RayQueue = new DeviceBuffer(sizeof(char)*m_numRaysPerTile);
 
         m_ctx.rayPayload    = m_rayQueue->ptr<Store<Ray>>();
         m_ctx.pbQueues[0]   = m_pointBoxQueue[0]->ptr<Store<PointBox>>();
@@ -75,12 +75,15 @@ namespace Reylax
         m_ctx.leafQueues[0] = m_leafQueue[0]->ptr<Store<RayLeaf>>();
         m_ctx.leafQueues[1] = m_leafQueue[1]->ptr<Store<RayLeaf>>();
         m_ctx.hitResults    = m_hitResults->ptr<HitResult>();
+        m_ctx.id2Queue      = m_id2Queue->ptr<byte>();
+     //   m_ctx.id2RayQueue   = m_id2RayQueue->ptr<char>();
 
         u64 totalMemory = 0;
         for ( u32 i=0; i<2; i++ )
         {
             totalMemory += m_pointBoxBuffer[i]->size() + m_pointBoxQueue[i]->size();
             totalMemory += m_leafBuffer[i]->size() + m_leafQueue[i]->size();
+            totalMemory += m_id2Queue->size();// + m_id2RayQueue->size();
         }
         totalMemory += m_rayQueue->size() + m_rayBuffer->size();
 
@@ -103,6 +106,8 @@ namespace Reylax
         delete m_rayQueue;
         delete m_rayBuffer;
         delete m_hitResults;
+        delete m_id2Queue;
+      //  delete m_id2RayQueue;
     }
 
     u32 Tracer::trace(u32 numRays, const IGpuStaticScene* scene, RaySetupFptr setupCb, HitResultFptr hitCb)
@@ -112,24 +117,28 @@ namespace Reylax
             return ERROR_INVALID_PARAMETER;
         }
 
-        auto scn = static_cast<const GpuStaticScene*>(scene);
+        GpuStaticScene* scn = (GpuStaticScene*)(scene);
 
-        const BvhNode* bvhNodes         = scn->m_bvhTree->ptr<const BvhNode>();
-        const Face* faces               = scn->m_faces->ptr<const Face>();
-        const FaceCluster* faceClusters = scn->m_faceClusters->ptr<const FaceCluster>();
-        const u32* sides                = scn->m_sides->ptr<const u32>();
-        MeshData** meshDataPtrs         = scn->m_meshDataPtrs->ptr<MeshData*>();
+        if ( scn != m_lastTracedScene )
+        {
+            const BvhNode* bvhNodes         = scn->m_bvhTree->ptr<const BvhNode>();
+            const Face* faces               = scn->m_faces->ptr<const Face>();
+            const FaceCluster* faceClusters = scn->m_faceClusters->ptr<const FaceCluster>();
+            const u32* sides                = scn->m_sides->ptr<const u32>();
+            MeshData** meshDataPtrs         = scn->m_meshDataPtrs->ptr<MeshData*>();
 
-        m_ctx.setupCb               = setupCb;
-        m_ctx.hitCb                 = hitCb;
-        m_ctx.bMin                  = scn->bMin;
-        m_ctx.bMax                  = scn->bMax;
-        m_ctx.bvhNodes              = bvhNodes;
-        m_ctx.faces                 = faces;
-        m_ctx.faceClusters          = faceClusters;
-        m_ctx.sides                 = sides;
-        m_ctx.meshDataPtrs          = meshDataPtrs;
-        UpdateTraceContext( m_ctx, false );
+            m_ctx.setupCb               = setupCb;
+            m_ctx.hitCb                 = hitCb;
+            m_ctx.bMin                  = scn->bMin;
+            m_ctx.bMax                  = scn->bMax;
+            m_ctx.bvhNodes              = bvhNodes;
+            m_ctx.faces                 = faces;
+            m_ctx.faceClusters          = faceClusters;
+            m_ctx.sides                 = sides;
+            m_ctx.meshDataPtrs          = meshDataPtrs;
+            UpdateTraceContext(m_ctx, false);
+            m_lastTracedScene = scn;
+        }
 
      //   m_profiler.beginProfile();
 

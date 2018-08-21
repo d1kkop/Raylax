@@ -121,36 +121,68 @@ namespace Reylax
     struct Store
     {
         T*  m_elements;
-    #if RL_CUDA || !RL_CPU_MT
-        u32 m_top;
-    #else
-        std::atomic<u32> m_top;
-    #endif
         u32 m_max;
+        u32 m_partMax;
+        u32 m_offsets[RL_NUMMER_INNER_QUEUES];
+    #if RL_CUDA || !RL_CPU_MT
+        u32 m_top[RL_NUMMER_INNER_QUEUES];
+    #else
+        std::atomic<u32> m_top[RL_NUMMER_INNER_QUEUES];
+    #endif
 
 
-        FDEVICE T* getNew(u32 cnt=1)
+        FDEVICE T* getNew(u32 idx, u32 cnt)
         {
+            u32 qIdx = idx&(RL_NUMMER_INNER_QUEUES-1);
+            
         #if RL_CUDA || !RL_CPU_MT
-            u32 old = atomicAdd2<u32>(&m_top, cnt);
+            u32 old = atomicAdd2<u32>(&m_top[qIdx], cnt);
         #else
-            u32 old = atomicAdd2<std::atomic<u32>>(&m_top, cnt);
+            u32 old = atomicAdd2<std::atomic<u32>>(&m_top[qIdx], cnt);
         #endif
-            assert(validate(old+cnt));
+            assert(validate(old+cnt)); 
          //   memset(m_elements + old, 0, sizeof(T)*cnt);
-            return m_elements + old;
+            return m_elements + (qIdx*m_partMax)+old;
         }
 
-        FDEVICE T* get(u32 idx) const
+        FDEVICE T* get(const byte* id2queue, u32 idx) const
         {
-            assert(idx < m_top);
-            return m_elements + idx;
+            i32 qIdx = id2queue[idx];
+            assert(m_top[qIdx]<=m_partMax);
+            return m_elements + qIdx*m_partMax + (idx-m_offsets[qIdx]);
+        }
+
+        FDEVICE T* getFromBase(u32 idx) const
+        {
+            assert(idx<m_max);
+            return m_elements+idx;
         }
 
         FDEVICE bool validate(u32 newTop) const
         {
-            if ( newTop > m_max ) printf("m_top = %d, _max = %d\n", newTop, m_max);
-            return newTop <= m_max;
+            if ( newTop > m_partMax ) printf("m_top = %d, _max = %d\n", newTop, m_partMax);
+            return newTop <= m_partMax;
+        }
+
+        FDEVICE void resetTop()
+        {
+            for ( auto& t : m_top ) t=0;
+        }
+
+        FDEVICE u32 getTop(u32 innerQueueIdx) const
+        {
+            return m_top[innerQueueIdx];
+        }
+
+        FDEVICE u32 updateToSingleQueue()
+        {
+            u32 totalLength = 0;
+            for ( u32 i=0; i<RL_NUMMER_INNER_QUEUES; ++i )
+            {
+                m_offsets[i] = totalLength;
+                totalLength += m_top[i];
+            }
+            return totalLength;
         }
     };
 
@@ -171,6 +203,9 @@ namespace Reylax
         u32 queueIn, queueOut;
         // Output
         HitResult* hitResults;
+        // Mapping
+        byte* id2Queue;
+     //   byte* id2RayQueue;
         // Callbacks
         RaySetupFptr setupCb;
         HitResultFptr   hitCb;

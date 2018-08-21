@@ -9,9 +9,10 @@
 using namespace glm;
 
 #define RL_CUDA 0
-#define RL_CPU_MT 0
+#define RL_CPU_MT 1
 #define RL_PRINT_STATS 1
 #define RL_RAY_ITERATIONS 32
+#define RL_NUMMER_INNER_QUEUES 1
 
 #if RL_CUDA
 

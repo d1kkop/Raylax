@@ -20,8 +20,11 @@ namespace Reylax
         DeviceBuffer* m_rayQueue{};
         DeviceBuffer* m_rayBuffer{};
         DeviceBuffer* m_hitResults{};
+        DeviceBuffer* m_id2Queue{};
+    //    DeviceBuffer* m_id2RayQueue{};
         Profiler m_profiler{};
         TracerContext m_ctx{};
         u32 m_numRaysPerTile{};
+        struct GpuStaticScene* m_lastTracedScene{};
     };
 }

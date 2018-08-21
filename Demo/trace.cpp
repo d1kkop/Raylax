@@ -71,8 +71,8 @@ HOST_OR_DEVICE u32 single(float f)
 
 HOST_OR_DEVICE void FirstRays(u32 globalId, u32 localId)
 {
-    vec3 dir = TD.orient * TD.rayDirs[globalId];
-    vec3 ori = TD.eye;
+    vec3 dir = /*TD.orient **/ TD.rayDirs[globalId];
+    vec3 ori = /*TD.eye;*/ vec3(0,0,-2.5f);
     QueueRayFunc( &ori.x, &dir.x ); 
 }
 
