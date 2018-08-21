@@ -43,11 +43,8 @@ namespace Reylax
      __align__(4)
      struct RayLeaf
      {
-         u32 localId;
-         u32 node;
+         PointBox pb;
          u32 faceIdx;
-         u32 ray;
-         vec3 point;
      };
 
      __align__(4)

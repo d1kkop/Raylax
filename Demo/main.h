@@ -31,8 +31,8 @@
 #endif
 
 #define DEMO_NAME "RayDemo"
-#define SCREEN_WIDTH 400
-#define SCREEN_HEIGHT 300
+#define SCREEN_WIDTH 256
+#define SCREEN_HEIGHT 256
 
 using namespace glm;
 using namespace Reylax;

@@ -81,7 +81,19 @@ HOST_OR_DEVICE void TraceCallback(u32 globalId, u32 localId, u32 depth,
                                   const MeshData* const* meshPtrs)
 {
   //  vec4 c = Interpolate<vec4>( hit, meshPtrs, VERTEX_DATA_EXTRA4 );
-    vec3 n = Interpolate<vec3>( hit, meshPtrs, VERTEX_DATA_NORMAL );
-    n = normalize( n );
-    TD.pixels[ globalId ] = single( abs(n.z) ) << 16;
+    if ( globalId == 256*128+140 )
+    {
+        TD.pixels[globalId] = (single(1.f)<<16) | (single(1));
+        return;
+    }
+    if ( hit.dist != FLT_MAX )
+    {
+        vec3 n = Interpolate<vec3>(hit, meshPtrs, VERTEX_DATA_NORMAL);
+        n = normalize(n);
+        TD.pixels[globalId] = single(abs(n.z)) << 16;
+    }
+    else
+    {
+        TD.pixels[globalId] = single(1.f)<<8;
+    }
 }

@@ -3,9 +3,11 @@
 #define BLOCK_THREADS 256
 #define NUM_RAYBOX_QUEUES 32
 #define NUM_LEAF_QUEUES 32
-#define MARCH_EPSILON 0.00001f
+#define MARCH_EPSILON 0.0001f
 
 #define DBG_QUERIES 0
+
+#define DBG_PIXEL (256*128+140)
 
 #if DBG_QUERIES
     #define DBG_QUERIES_BEGIN( str ) printf("\n--- %s ---\n", (str))
@@ -53,7 +55,7 @@ namespace Reylax
             ray->sign[1] = d.y > 0 ? 1 : 0;
             ray->sign[2] = d.z > 0 ? 1 : 0;
             PointBox* pb = ct.pbQueues[0]->getNew(1);
-            pb->point    = o + (kDist+MARCH_EPSILON)*d;
+            pb->point    = o + d*(kDist+MARCH_EPSILON);
             pb->localId  = bIdx.x * bDim.x + tIdx.x;
             pb->node     = 0;
             pb->ray      = (u32)(ray - ct.rayPayload->m_elements);
@@ -73,11 +75,25 @@ namespace Reylax
             if ( node->numFaces() != 0 )
             {
                 RayLeaf* rl = ct.leafQueues[0]->getNew(1);
+                rl->pb      = *pb;
                 rl->faceIdx = 0;
-                rl->node    = pb->node;
-                rl->localId = pb->localId;
-                rl->ray     = pb->ray;
-                rl->point = pb->point; // TEMP
+            }
+            else
+            {
+                const vec3* bounds  = &node->bMin;
+                float distToBox = FLT_MAX;
+                vec3 pnt = pb->point;
+                Ray* ray = ct.rayPayload->get(pb->ray);
+                u32 nextBoxId   = SelectNextBox(bounds, ct.sides + node->right*6, ray->sign, pnt, ray->invd, distToBox);
+                if ( nextBoxId != RL_INVALID_INDEX )
+                {
+                    vec3 dir = ray->d;
+                    PointBox* pbNew = ct.pbQueues[ct.queueOut]->getNew(1);
+                    pbNew->point    = pnt + dir*(distToBox+MARCH_EPSILON); // TODO check epsilon
+                    pbNew->node     = nextBoxId;
+                    pbNew->localId  = pb->localId;
+                    pbNew->ray      = pb->ray;
+                }
             }
         }
         else if ( PointInAABB(pb->point, node->bMin, node->bMax) )
@@ -85,14 +101,10 @@ namespace Reylax
             // both must be valid
             assert(RL_VALID_INDEX(node->left) && RL_VALID_INDEX(BVH_GET_INDEX(node->right)));
             PointBox* pbNew = ct.pbQueues[ct.queueOut]->getNew(1);
-            pbNew->localId  = pb->localId;
-            pbNew->point    = pb->point;
-            pbNew->ray      = pb->ray;
+            *pbNew           = *pb;
             u32 spAxis      = BVH_GET_AXIS(node->right);
             float s         = (node->bMax[spAxis] + node->bMin[spAxis])*.5f;
             if ( pb->point[spAxis] < s )
-            // const BvhNode* nodeT = ct.bvhNodes + node->left;
-            // if ( PointInAABB(pb->point, nodeT->bMin, nodeT->bMax) )
             {
                 pbNew->node = node->left;
             }
@@ -109,19 +121,19 @@ namespace Reylax
         if ( i >= ct.leafQueues[ct.queueIn]->m_top ) return;
 
         RayLeaf* leaf    = ct.leafQueues[ct.queueIn]->get(i);
-        const auto* node = ct.bvhNodes + leaf->node;
-        const Ray*  ray  = ct.rayPayload->get(leaf->ray);
+        const auto* node = ct.bvhNodes + leaf->pb.node;
+        const Ray*  ray  = ct.rayPayload->get(leaf->pb.ray);
 
-        assert( node->isLeaf() && leaf->faceIdx < node->numFaces() );
+        assert( node->isLeaf() );
 
-        vec3 o  = ray->o;
-        vec3 d  = ray->d;
+        const vec3& pnt  = leaf->pb.point;
+        const vec3& dir  = ray->d;
 
         u32 numFaces = node->numFaces();
         u32 faceIdx  = leaf->faceIdx;
         u32 loopCnt  = numFaces;// TODO _min(numFaces - faceIdx, 4U);  // Change this to reduce number of writes back to global memory at the cost of more idling threads.
 
-        HitResult* result = ct.hitResults + leaf->localId;
+        HitResult* result = ct.hitResults + leaf->pb.localId;
         float fDist = result->dist;
         float fU    = -1.f;
         float fV    = -1.f;
@@ -136,7 +148,7 @@ namespace Reylax
         {
             const Face* face = faces + node->getFace(fclusters, faceIdx);
             float u, v;
-            float dist = FaceRayIntersect(face, o, d, ct.meshDataPtrs, u, v);
+            float dist = FaceRayIntersect(face, pnt, dir, ct.meshDataPtrs, u, v);
             if ( dist < fDist )
             {
                 fU = u;
@@ -154,51 +166,36 @@ namespace Reylax
             result->v = fV;
             result->dist = fDist;
             result->face = closestFace;
-            result->ray  = leaf->ray;
+            result->ray  = leaf->pb.ray;
+            vec3 ori = ray->o;
         #pragma unroll
             for ( u32 i=0; i<3; ++i )
             {
-                result->ro[i] = o[i];
-                result->rd[i] = d[i];
+                result->ro[i] = ori[i];
+                result->rd[i] = dir[i];
             }
         }
 
         // If there are still faces left to process, queue new Ray/Leaf item
         if ( faceIdx < numFaces )
         {
-            u32 nodeIdx     = leaf->node;
-            u32 rayIdx      = leaf->ray;
-            u32 localId     = leaf->localId;
-            vec3 point      = leaf->point;
+            PointBox pb = leaf->pb;
             leaf = ct.leafQueues[ct.queueOut]->getNew(1);
-            leaf->faceIdx   = faceIdx;
-            leaf->node      = nodeIdx;
-            leaf->localId   = localId;
-            leaf->ray       = rayIdx;
-            leaf->point = point; // TEMP
+            leaf->pb = pb;
+            leaf->faceIdx = faceIdx;
         }
         else // If no faces left to process, march ray to next box
         {
-            //PointBox* pb    = ct.pbQueues[0]->getNew(1);
-            //pb->localId     = leaf->localId;
-            //pb->point       = leaf->point + d*(0.1f+MARCH_EPSILON); // TODO check epsilon
-            //pb->node        = 0;
-            //pb->ray         = leaf->ray;
-
             const vec3* bounds  = &node->bMin;
-            u32 sideIdx         = node->right; // No need to do GET_INDEX as no spAxis is stored in leaf node
-            vec3 invd           = ray->invd;
-            const char* signs   = ray->sign;
             float distToBox = FLT_MAX;
-            u32 nextBoxId   = SelectNextBox( bounds, ct.sides + sideIdx*6, signs, o, invd, distToBox );
+            u32 nextBoxId   = SelectNextBox( bounds, ct.sides + node->right*6, ray->sign, pnt, ray->invd, distToBox );
             if ( nextBoxId != RL_INVALID_INDEX && result->dist > distToBox )
             {
-         //       printf("NextBoxId %d\n", nextBoxId);
                 PointBox* pb    = ct.pbQueues[0]->getNew(1);
-                pb->localId     = leaf->localId;
-                pb->point       = o + d*(distToBox+MARCH_EPSILON); // TODO check epsilon
+                pb->point       = pnt + dir*(distToBox+MARCH_EPSILON); // TODO check epsilon
                 pb->node        = nextBoxId;
-                pb->ray         = leaf->ray;
+                pb->localId     = leaf->pb.localId;
+                pb->ray         = leaf->pb.ray;
             }
         }
     }
@@ -222,10 +219,10 @@ namespace Reylax
     {
         u32 localId = bIdx.x * bDim.x + tIdx.x;
         if ( localId >= numRays ) return;
-        if ( ct.hitResults[localId].dist == FLT_MAX ) return;
+       // if ( ct.hitResults[localId].dist == FLT_MAX ) return;
         u32 globalId = tileOffset + localId;
         const HitResult& hit = ct.hitResults[localId];
-        Ray* ray = ct.rayPayload->get( hit.ray );
+        //Ray* ray = ct.rayPayload->get( hit.ray );
         ct.hitCb( globalId, localId, ct.curDepth, hit, ct.meshDataPtrs );
     }
 
