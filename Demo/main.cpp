@@ -243,44 +243,6 @@ int main(int argc, char** argv)
         scene = IGpuStaticScene::create(meshes.data(), (u32)meshes.size());
         assert(scene);
         for ( auto& m : meshes ) delete m;  // all data is on device, safe to delete meshes in host memory
-
-        
-        //IMesh* mesh = IMesh::create();
-        //vec3* vertices = new vec3[4];
-        //vec3* normals  = new vec3[4];
-        //vertices[0] = vec3(-1.f, -1.f, 1.56f);
-        //vertices[1] = vec3(0.f, 1.f, 1.56f);
-        //vertices[2] = vec3(1.f, -1.f, 1.56f);
-        //vertices[3] = vec3(2.f, 1.f, 1.56f);
-        //for ( int i=0; i<4; i++ ) normals[i] = vec3(0, 0, -1);
-        //u32* indices = new u32[6];
-        //indices[0]=0;
-        //indices[1]=1;
-        //indices[2]=2;
-        //indices[3]=1;
-        //indices[4]=2;
-        //indices[5]=3;
-        //vec4* colors = new vec4[4];
-        //colors[0] = vec4(1.f, 0.f, 0.f, 1.f);
-        //colors[1] = vec4(0.f, 1.f, 0.f, 1.f);
-        //colors[2] = vec4(0.f, 0.f, 1.f, 1.f);
-        //colors[3] = vec4(1.f, 1.f, 0.f, 1.f);
-        //u32 err;
-        //err = mesh->setIndices(indices, 6);
-        //assert(err==0);
-        //err = mesh->setVertexData((float*)vertices, 4, 3, VERTEX_DATA_POSITION);
-        //assert(err==0);
-        //err = mesh->setVertexData((float*)colors, 4, 4, VERTEX_DATA_EXTRA4);
-        //assert(err==0);
-        //err = mesh->setVertexData((float*)normals, 4, 3, VERTEX_DATA_NORMAL);
-        //assert(err==0);
-        //delete[] colors;
-        //delete[] indices;
-        //delete[] vertices;
-        //delete[] normals;
-        //scene = IGpuStaticScene::create( &mesh, 1 );
-        //assert(scene);
-
     }
 
     // Set up primary rays of a pinhole camera in local space

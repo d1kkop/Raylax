@@ -32,7 +32,7 @@ namespace Reylax
             std::vector<Face> faces;
         };
 
-        const u32 stSize = 64;
+        const u32 stSize = BVH_MAX_DEPTH;
         stNode stack[stSize];
 
         // push first faces on stack and approximate face count to allocate
@@ -93,7 +93,13 @@ namespace Reylax
             st = &stack[top--];
             BvhNode*node = st->node;
 
-            if ( st->depth == BVH_MAX_DEPTH || (u32)st->faces.size() <= BVH_NUM_FACES_IN_LEAF )
+            vec3 bMin = node->bMin;
+            vec3 bMax = node->bMax;
+            vec3 hs = (bMax - bMin)*.5f;
+            assert(hs.x>0.f && hs.y>0.f && hs.z>0.f);
+
+            if ( st->depth == BVH_MAX_DEPTH || (u32)st->faces.size() <= BVH_NUM_FACES_IN_LEAF ||
+                 ( hs.x <= BVH_MIN_SIZE || hs.y <= BVH_MIN_SIZE || hs.z <= BVH_MIN_SIZE ) )
             {
                 if ( (u32)st->faces.size() > BVH_NUM_FACES_IN_LEAF )
                 {
@@ -124,20 +130,16 @@ namespace Reylax
             }
             else
             {
-                vec3 bMin = node->bMin;
-                vec3 bMax = node->bMax;
                 u32 splitAxis = 0;
-                vec3 hs = (bMax - bMin)*.5f;
-                assert( hs.x>0.f && hs.y>0.f && hs.z>0.f );
-
                 float biggest = hs.x;
                 if ( hs.y > biggest ) { splitAxis = 1; biggest = hs.y; }
                 if ( hs.z > biggest ) { splitAxis = 2; }
+
             #if BVH_DBG_INFO
                printf("splitAxis %d\n", splitAxis);
             #endif
 
-                float s = (node->bMax[splitAxis] + node->bMin[splitAxis])*.5f;
+                float s = (bMax[splitAxis] + bMin[splitAxis])*.5f;
                 vec3 lMax = node->bMax;
                 vec3 rMin = node->bMin;
                 lMax[splitAxis] = s;
@@ -205,7 +207,7 @@ namespace Reylax
             u32 node;
             u32 indices[6];
         };
-        sideStack sstack[64];
+        sideStack sstack[stSize];
         sideStack* sst = &sstack[0];
         sst->node = 0;
         top=0;
@@ -222,7 +224,7 @@ namespace Reylax
             }
             else
             {
-                assert( top + 2 < 64 );
+                assert( top + 2 < stSize );
                 u32 spAxis = BVH_GET_AXIS( node->right );
                 assert(spAxis==0 || spAxis==1 || spAxis==2);
                 u32 oldSides[6];

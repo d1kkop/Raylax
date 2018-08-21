@@ -32,7 +32,7 @@ namespace Reylax
             vec3 bMin, bMax;
         };
 
-        const u32 stSize = 64;
+        const u32 stSize = BVH_MAX_DEPTH;
         stNode stack[stSize];
 
         // push first faces on stack and approximate face count to allocate
@@ -101,6 +101,9 @@ namespace Reylax
             node->left   = 0;   // 0 is also useful to detect as invalid because only the first node can have 0, all others must be higher
             node->right  = 0;
 
+            vec3 hs = (node->bMax - node->bMin)*.5f;
+            assert(hs.x>0.f && hs.y>0.f && hs.z>0.f);
+
             // If cur stack node has valid parent index, we can now efficiently assign index children of parent
             // such that the indexing of nodes: 0, 1, 2... is linear in memory.
             if ( RL_VALID_INDEX(st->parentIdx) )
@@ -114,7 +117,8 @@ namespace Reylax
                 }
             }
 
-            if ( st->depth == BVH_MAX_DEPTH || (u32)st->faces.size() <= BVH_NUM_FACES_IN_LEAF )
+            if ( st->depth == BVH_MAX_DEPTH || (u32)st->faces.size() <= BVH_NUM_FACES_IN_LEAF || 
+                ( hs.x <= BVH_MIN_SIZE || hs.y <= BVH_MIN_SIZE || hs.z <= BVH_MIN_SIZE ) )
             {
                 if ( (u32)st->faces.size() > BVH_NUM_FACES_IN_LEAF )
                 {
@@ -146,26 +150,16 @@ namespace Reylax
             else
             {
                 u32 splitAxis = 0;
-                vec3 hs = (node->bMax - node->bMin)*.5f;
-                assert( hs.x>0.f && hs.y>0.f && hs.z>0.f );
-
                 float biggest = hs.x;
                 if ( hs.y > biggest ) { splitAxis = 1; biggest = hs.y; }
                 if ( hs.z > biggest ) { splitAxis = 2; }
+                BVH_SET_AXIS( node->right, splitAxis );
+
             #if BVH_DBG_INFO
                printf("splitAxis %d\n", splitAxis);
             #endif
-                BVH_SET_AXIS( node->right, splitAxis );
 
-                // NOTE: Cannot take centre as 'midpoint' as it might be outside the bbox due to triangles overlapping the boundaries.
-            //    vec3 centre;
-            //    determineCentre( st->faces, meshData, centre );
-                float s = (st->bMax[splitAxis]+st->bMin[splitAxis])*.5f;// centre[splitAxis];
-            //    float lowerBound = node->bMin[splitAxis] + hs[splitAxis] * 0.1f;
-            //    float upperBound = node->bMax[splitAxis] - hs[splitAxis] * 0.1f;
-            //    s = _max( s, lowerBound );
-            //    s = _min( s, upperBound );
-
+                float s = (st->bMax[splitAxis]+st->bMin[splitAxis])*.5f;
                 vec3 lMax = st->bMax;
                 vec3 rMin = st->bMin;
                 lMax[splitAxis] = s;
@@ -221,7 +215,7 @@ namespace Reylax
             u32 node;
             u32 indices[6];
         };
-        sideStack sstack[64];
+        sideStack sstack[stSize];
         sideStack* sst = &sstack[0];
         sst->node = 0;
         top=0;
@@ -238,7 +232,7 @@ namespace Reylax
             }
             else
             {
-                assert( top + 2 < 64 );
+                assert( top + 2 < stSize );
                 u32 spAxis = BVH_GET_AXIS( node->right );
                 assert(spAxis==0 || spAxis==1 || spAxis==2);
                 u32 oldSides[6];
@@ -362,7 +356,7 @@ namespace Reylax
         {
             stackNode* st = &stack[top--];
             const BvhNode* node = nodes + st->node;
-            maxDepth = max(maxDepth, st->depth);
+            maxDepth = _max(maxDepth, st->depth);
             numNodes++;
 
             if ( node->isLeaf() )
@@ -370,7 +364,7 @@ namespace Reylax
                 numLeafs++;
                 numFaces += node->numFaces();
                 avgFacesPerLeaf += node->numFaces();
-                maxFacesInLeaf  = max<u64>(node->numFaces(), maxFacesInLeaf);
+                maxFacesInLeaf  = _max<u64>(node->numFaces(), maxFacesInLeaf);
                 avgDepth += st->depth;
             }
             else

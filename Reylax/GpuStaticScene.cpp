@@ -41,7 +41,7 @@ namespace Reylax
         GpuStaticScene* gpuScene = new GpuStaticScene{};
 
         // Build BVH.
-        u32 err = BvhNode::build2(mds.data(), (u32)mds.size(),
+        u32 err = BvhNode::build(mds.data(), (u32)mds.size(),
                                  &gpuScene->m_bvhTree,
                                  &gpuScene->m_faces,
                                  &gpuScene->m_faceClusters,

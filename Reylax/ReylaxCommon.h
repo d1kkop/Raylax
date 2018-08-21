@@ -1,14 +1,15 @@
 #pragma once
 #include "Reylax_internal.h"
 #include <vector>
-
+#include <atomic>
 
 #define RL_INVALID_INDEX ((u32)-1)
 #define RL_VALID_INDEX( idx ) (idx!=RL_INVALID_INDEX)
 
 #define BVH_MAX_DEPTH 64
-#define BVH_NUM_FACES_IN_LEAF 32
+#define BVH_NUM_FACES_IN_LEAF 16
 #define BVH_DBG_INFO 1
+#define BVH_MIN_SIZE 0.001f
 
 #define BVH_ISLEAF( idx ) (((idx)>>31)==1)
 #define BVH_GETNUM_TRIANGLES(idx) ((idx)&0x7FFFFFF)
@@ -120,14 +121,23 @@ namespace Reylax
     struct Store
     {
         T*  m_elements;
+    #if RL_CUDA || !RL_CPU_MT
         u32 m_top;
+    #else
+        std::atomic<u32> m_top;
+    #endif
         u32 m_max;
+
 
         FDEVICE T* getNew(u32 cnt=1)
         {
+        #if RL_CUDA || !RL_CPU_MT
             u32 old = atomicAdd2<u32>(&m_top, cnt);
+        #else
+            u32 old = atomicAdd2<std::atomic<u32>>(&m_top, cnt);
+        #endif
             assert(validate(old+cnt));
-            memset(m_elements + old, 0, sizeof(T)*cnt);
+         //   memset(m_elements + old, 0, sizeof(T)*cnt);
             return m_elements + old;
         }
 
@@ -241,12 +251,22 @@ namespace Reylax
         //return (dmax >= dmin ? dist : FLT_MAX);
     }
 
+    FDEVICE INLINE float BoxRayIntersectOutside(const vec3& bMin, const vec3& bMax, const vec3& orig, const vec3& invDir)
+    {
+        vec3 tMin  = (bMin - orig) * invDir;
+        vec3 tMax  = (bMax - orig) * invDir;
+        vec3 oMin  = _min(tMin, tMax);
+        float dmin = _max(oMin.x, _max(oMin.y, oMin.z));
+        dmin = dmin >= 0.f ? dmin : FLT_MAX;
+        return dmin;
+    }
+
     FDEVICE INLINE u32 SelectNextBox(const vec3* bounds, const u32* links, const char* sign, 
                                      const vec3& p, const vec3& rinvd, float& tOut)
     {
-        float xDist = abs((bounds[sign[0]].x - p.x) * rinvd.x);
-        float yDist = abs((bounds[sign[1]].y - p.y) * rinvd.y);
-        float zDist = abs((bounds[sign[2]].z - p.z) * rinvd.z);
+        float xDist = ((bounds[sign[0]].x - p.x) * rinvd.x);
+        float yDist = ((bounds[sign[1]].y - p.y) * rinvd.y);
+        float zDist = ((bounds[sign[2]].z - p.z) * rinvd.z);
      //   assert( xDist >= 0 && yDist >= 0 && zDist >= 0 );
 
         // assume xDist being the smallest
@@ -277,7 +297,7 @@ namespace Reylax
         //tOut   = bEval? zDist : xDist;
         //offset = bEval? 4 : offset;
         //side   = bEval? 2 : side;
-        //return 0;
+     //   return 0;
         return links[offset + sign[spAxis]];
     }
 

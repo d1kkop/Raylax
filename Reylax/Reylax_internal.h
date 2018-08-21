@@ -59,7 +59,7 @@ namespace Reylax
     struct Profiler
     {
         double m_interval=2000;
-        bool m_show=true;
+        bool m_show=false;
         double m_start;
         std::vector<std::pair<std::string, double>> m_items;
 

@@ -131,7 +131,7 @@ namespace Reylax
         m_ctx.meshDataPtrs          = meshDataPtrs;
         UpdateTraceContext( m_ctx, false );
 
-        m_profiler.beginProfile();
+     //   m_profiler.beginProfile();
 
         // while rays to process, process per batch/tile to conserve memory usage
         u32 kTile=0;
@@ -147,7 +147,7 @@ namespace Reylax
             kTile++;
             tileOffset += numRaysTile;
         }
-        m_profiler.endProfile("Trace");
+    //    m_profiler.endProfile("Trace");
   
         return ERROR_ALL_FINE;
     }

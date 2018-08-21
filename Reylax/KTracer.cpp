@@ -3,7 +3,8 @@
 #define BLOCK_THREADS 256
 #define NUM_RAYBOX_QUEUES 32
 #define NUM_LEAF_QUEUES 32
-#define MARCH_EPSILON 0.0001f
+#define MARCH_EPSILON 0.00001f
+#define NUM_FACE_ITERS 16U
 
 #define DBG_QUERIES 0
 
@@ -89,14 +90,14 @@ namespace Reylax
                 {
                     vec3 dir = ray->d;
                     PointBox* pbNew = ct.pbQueues[ct.queueOut]->getNew(1);
-                    pbNew->point    = pnt + dir*(distToBox+MARCH_EPSILON); // TODO check epsilon
+                    pbNew->point    = pnt + dir*(distToBox+MARCH_EPSILON);
                     pbNew->node     = nextBoxId;
                     pbNew->localId  = pb->localId;
                     pbNew->ray      = pb->ray;
                 }
             }
         }
-        else if ( PointInAABB(pb->point, node->bMin, node->bMax) )
+        else /* if ( PointInAABB(pb->point, node->bMin, node->bMax) ) */ // Should no longer be necessary as the marching point always progresses, so eventually an 'invalid' box will be selected and the trace quits.
         {
             // both must be valid
             assert(RL_VALID_INDEX(node->left) && RL_VALID_INDEX(BVH_GET_INDEX(node->right)));
@@ -131,7 +132,7 @@ namespace Reylax
 
         u32 numFaces = node->numFaces();
         u32 faceIdx  = leaf->faceIdx;
-        u32 loopCnt  = numFaces;// TODO _min(numFaces - faceIdx, 4U);  // Change this to reduce number of writes back to global memory at the cost of more idling threads.
+        u32 loopCnt  = _min(numFaces - faceIdx, NUM_FACE_ITERS);
 
         HitResult* result = ct.hitResults + leaf->pb.localId;
         float fDist = result->dist;
@@ -192,7 +193,7 @@ namespace Reylax
             if ( nextBoxId != RL_INVALID_INDEX && result->dist > distToBox )
             {
                 PointBox* pb    = ct.pbQueues[0]->getNew(1);
-                pb->point       = pnt + dir*(distToBox+MARCH_EPSILON); // TODO check epsilon
+                pb->point       = pnt + dir*(distToBox+MARCH_EPSILON);
                 pb->node        = nextBoxId;
                 pb->localId     = leaf->pb.localId;
                 pb->ray         = leaf->pb.ray;
@@ -219,7 +220,7 @@ namespace Reylax
     {
         u32 localId = bIdx.x * bDim.x + tIdx.x;
         if ( localId >= numRays ) return;
-       // if ( ct.hitResults[localId].dist == FLT_MAX ) return;
+        if ( ct.hitResults[localId].dist == FLT_MAX ) return;
         u32 globalId = tileOffset + localId;
         const HitResult& hit = ct.hitResults[localId];
         //Ray* ray = ct.rayPayload->get( hit.ray );
@@ -287,7 +288,7 @@ namespace Reylax
                 ct.queueIn = 0;
                 numIters++;
             } // End while there are still point-box queries
-            printf("-- Num iters for a single tile %d --\n", numIters );
+        //    printf("-- Num iters for a single tile %d --\n", numIters );
 
             // TODO: For now, for each ray in tile, execute hit result (whether it was hit or not)
             dim3 blocks  ((numRays + BLOCK_THREADS-1)/BLOCK_THREADS);
