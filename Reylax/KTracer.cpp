@@ -102,7 +102,7 @@ namespace Reylax
             // both must be valid
             assert(RL_VALID_INDEX(node->left) && RL_VALID_INDEX(BVH_GET_INDEX(node->right)));
             PointBox* pbNew = ct.pbQueues[ct.queueOut]->getNew(1);
-            *pbNew           = *pb;
+            *pbNew          = *pb;
             u32 spAxis      = BVH_GET_AXIS(node->right);
             float s         = (node->bMax[spAxis] + node->bMin[spAxis])*.5f;
             if ( pb->point[spAxis] < s )

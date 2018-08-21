@@ -8,7 +8,7 @@
 
 #define BVH_MAX_DEPTH 64
 #define BVH_NUM_FACES_IN_LEAF 16
-#define BVH_DBG_INFO 1
+#define BVH_DBG_INFO 0
 #define BVH_MIN_SIZE 0.001f
 
 #define BVH_ISLEAF( idx ) (((idx)>>31)==1)
