@@ -1,5 +1,6 @@
 #include "Reylax.h"
 #include "Reylax_internal.h"
+#include "ReylaxCommon.h"
 #include <chrono>
 using namespace std;
 using namespace chrono;
@@ -11,6 +12,9 @@ thread_local uint4 cpu_blockIdx{};
 
 namespace Reylax
 {
+    extern Profiler CpuProfiler;
+
+
     void SetDevice(u32 device)
     {
         RL_CUDA_CALL(cudaSetDevice(device));
@@ -51,9 +55,15 @@ namespace Reylax
         }
     }
 
-    void emulateCpu(u32 blockDimension, const dim3& blocks, const dim3& threads, const std::function<void ()>& cb)
+    void emulateCpu(const char* profileName, u32 blockDimension, const dim3& blocks, const dim3& threads, const std::function<void ()>& cb)
     {
+        if ( blocks.x == 1 && threads.x == 1 ) // Auto detect helper threads
+        {
+            cb();
+            return;
+        }
     #if !RL_CUDA
+    //    CpuProfiler.start();
         bDim.x = blockDimension;
     #if !RL_CPU_MT
         for ( u32 b=0; b <blocks.x; b++ )
@@ -68,8 +78,8 @@ namespace Reylax
     #else
         concurrency::parallel_for<u32>(0, blocks.x*threads.x, 1, [&](u32 idx)
         {
-            bIdx.x = idx>>8;
-            tIdx.x = idx-(bIdx.x<<8);
+            bIdx.x = idx/RL_BLOCK_THREADS;
+            tIdx.x = idx-(bIdx.x*RL_BLOCK_THREADS);
             cb();
             /*u32 bPart = blocks.x/4;
             u32 b = idx*bPart;
@@ -86,6 +96,7 @@ namespace Reylax
             }*/
         });
     #endif
+   //     CpuProfiler.stop(profileName);
     #endif
     }
 

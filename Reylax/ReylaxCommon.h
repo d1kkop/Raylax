@@ -6,8 +6,8 @@
 #define RL_INVALID_INDEX ((u32)-1)
 #define RL_VALID_INDEX( idx ) (idx!=RL_INVALID_INDEX)
 
-#define BVH_MAX_DEPTH 64
-#define BVH_NUM_FACES_IN_LEAF 16
+#define BVH_MAX_DEPTH 32
+#define BVH_NUM_FACES_IN_LEAF 12
 #define BVH_DBG_INFO 0
 #define BVH_MIN_SIZE 0.001f
 
@@ -19,6 +19,7 @@
 #define BVH_SET_AXIS(idx, axis) ((idx)|=((axis)<<30))
 #define BVH_GET_AXIS(idx) ((idx)>>30)
 
+#define RL_BLOCK_THREADS 256
 
 
 namespace Reylax
@@ -244,7 +245,8 @@ namespace Reylax
         const u32* sides;
         const MeshData* const* meshDataPtrs;
         // -- Changes every kernel run 0, to 1 ---
-        u32 queueIn, queueOut;
+        u32 pbQueueIn, pbQueueOut;
+        u32 rlQueueIn, rlQueueOut;
         // Output
         HitResult* hitResults;
         // Mapping

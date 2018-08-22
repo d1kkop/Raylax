@@ -239,7 +239,7 @@ int main(int argc, char** argv)
 
     // Load test model and use as 'scene'
     {
-        if ( !LoadModel(R"(D:\_Programming\2018\RaytracerCuda\Content/f16.obj)", meshes) ) return -1;
+        if ( !LoadModel(R"(D:\_Programming\2018\RaytracerCuda\Content/armadillo.obj)", meshes) ) return -1;
         scene = IGpuStaticScene::create(meshes.data(), (u32)meshes.size());
         assert(scene);
         for ( auto& m : meshes ) delete m;  // all data is on device, safe to delete meshes in host memory
@@ -255,7 +255,7 @@ int main(int argc, char** argv)
     }
 
     // Create the actual tracer
-    tracer = ITracer::create();
+    tracer = ITracer::create( width*height );
 
     // Update loop
     Program p{};

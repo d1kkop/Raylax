@@ -11,6 +11,7 @@ namespace Reylax
     DEVICE void QueueRay(const float* ori, const float* dir);
     extern void UpdateTraceContext(const TracerContext& ct, bool wait);
 
+    Profiler CpuProfiler;
 
     ITracer* ITracer::create(u32 numRaysPerTile, u32 maxRecursionDepth)
     {
@@ -26,7 +27,7 @@ namespace Reylax
         printf("\n--- Tracer allocations ---\n\n");
     #endif
 
-        u32 numQueries = m_numRaysPerTile*maxRecursionDepth;
+        u32 numQueries = m_numRaysPerTile;// TODO check allocation style, multiple queries per ray possible, so this is not correct *maxRecursionDepth;
         for ( u32 i=0; i<2; i++ )
         {
             m_pointBoxQueue[i]  = new DeviceBuffer(sizeof(Store<PointBox>));
@@ -136,7 +137,7 @@ namespace Reylax
             m_lastTracedScene = scn;
         }
 
-     //   m_profiler.beginProfile();
+        CpuProfiler.beginProfile();
 
         // while rays to process, process per batch/tile to conserve memory usage
         u32 kTile=0;
@@ -145,14 +146,15 @@ namespace Reylax
         {
             u32 numRaysTile = min( m_numRaysPerTile, numRays-tileOffset );
 
-            m_profiler.start();
+            CpuProfiler.start();
             RL_KERNEL_CALL( 1, 1, 1, TileKernel, numRaysTile, tileOffset );
-            m_profiler.stop( "Tile " + to_string(kTile) );
+            CpuProfiler.stop( "Tile " + to_string(kTile) );
 
             kTile++;
             tileOffset += numRaysTile;
         }
-    //    m_profiler.endProfile("Trace");
+
+        CpuProfiler.endProfile("Trace");
   
         return ERROR_ALL_FINE;
     }

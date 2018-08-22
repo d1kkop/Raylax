@@ -2,7 +2,7 @@
 #include "Reylax.h"
 #include "Reylax_internal.h"
 
-#define BLOCK_THREADS 256
+#define RL_BLOCK_THREADS 1024
 #define NUM_RAYBOX_QUEUES 32
 #define NUM_LEAF_QUEUES 32
 
@@ -225,9 +225,9 @@ namespace Reylax
         leafQueues[0]->m_top   = 0;
 
         // Set up initial Ray/box queries
-        dim3 blocks  ((numRays + BLOCK_THREADS-1)/BLOCK_THREADS);
-        dim3 threads (BLOCK_THREADS);
-        RL_KERNEL_CALL(BLOCK_THREADS, blocks, threads, PerRayInitializationKernel, numRays, rbQueues[0]);
+        dim3 blocks  ((numRays + RL_BLOCK_THREADS-1)/RL_BLOCK_THREADS);
+        dim3 threads (RL_BLOCK_THREADS);
+        RL_KERNEL_CALL(RL_BLOCK_THREADS, blocks, threads, PerRayInitializationKernel, numRays, rbQueues[0]);
 
         // Iterate Ray/box queries until queues are empty
         {
@@ -257,8 +257,8 @@ namespace Reylax
 
                 // execute all rb queries from queue-in and generate new to queue-out or leaf-queue
                 u32 numRayBoxes = rbQueues[inQueue]->m_top;
-                blocks = dim3((numRayBoxes + BLOCK_THREADS-1)/BLOCK_THREADS);
-                RL_KERNEL_CALL(BLOCK_THREADS, blocks, threads, RayBoxKernel, numRayBoxes, rbQueues[inQueue], rbQueues[outQueue], leafQueues[0], rayDirs, bvhNodes);
+                blocks = dim3((numRayBoxes + RL_BLOCK_THREADS-1)/RL_BLOCK_THREADS);
+                RL_KERNEL_CALL(RL_BLOCK_THREADS, blocks, threads, RayBoxKernel, numRayBoxes, rbQueues[inQueue], rbQueues[outQueue], leafQueues[0], rayDirs, bvhNodes);
                 cudaDeviceSynchronize();
 
             #if DBG_RB_QUERIES

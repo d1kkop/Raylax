@@ -48,11 +48,11 @@ namespace Reylax
             stack[0].faces.push_back( f );
             allocatedFaceCount++;
         });
-        allocatedFaceCount *= 200;
+        allocatedFaceCount *= 30;
 
         // allocate sufficient amount of data
         u32 numNodes = 1024*1024*8;
-        u32 numFacesClusters = _max<u32>((u32)sqrt(numNodes), allocatedFaceCount/(BVH_NUM_FACES_IN_LEAF/8));
+        u32 numFacesClusters = numNodes*2/BVH_NUM_FACES_IN_LEAF;
 
     #if RL_PRINT_STATS
         printf("--- BVH Static intermediate allocations ---\n\n");

@@ -8,7 +8,7 @@ namespace Reylax
 {
     struct Tracer: public ITracer
     {
-        Tracer(u32 numRaysPerTile=256*256, u32 maxRecursionDepth=8);
+        Tracer(u32 numRaysPerTile=1024*1024, u32 maxRecursionDepth=8);
         virtual ~Tracer();
         u32 trace( u32 numRays, const IGpuStaticScene* scene, RaySetupFptr setupCb, HitResultFptr hitCb ) override;
         QueueRayFptr getQueueRayAddress() const override;
@@ -22,7 +22,6 @@ namespace Reylax
         DeviceBuffer* m_hitResults{};
         DeviceBuffer* m_id2Queue{};
     //    DeviceBuffer* m_id2RayQueue{};
-        Profiler m_profiler{};
         TracerContext m_ctx{};
         u32 m_numRaysPerTile{};
         struct GpuStaticScene* m_lastTracedScene{};

@@ -65,7 +65,7 @@ namespace Reylax
 
     struct ITracer
     {
-        RL_DLL static ITracer* create(u32 numRaysPerTile=256*256, u32 maxRecursionDepth=8);
+        RL_DLL static ITracer* create(u32 numRaysPerTile=1024*1024, u32 maxRecursionDepth=8);
         virtual ~ITracer() = default;
         virtual u32 trace( u32 numRays, const IGpuStaticScene* scene, RaySetupFptr setupCb, HitResultFptr hitCb ) = 0;
         virtual QueueRayFptr getQueueRayAddress() const = 0;

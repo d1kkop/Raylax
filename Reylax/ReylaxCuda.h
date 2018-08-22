@@ -11,7 +11,7 @@ using namespace glm;
 #define RL_CUDA 0
 #define RL_CPU_MT 0
 #define RL_USE_INNER_QUEUES 0
-#define RL_NUMMER_INNER_QUEUES 128
+#define RL_NUMMER_INNER_QUEUES 256
 
 #define RL_PRINT_STATS 1
 #define RL_RAY_ITERATIONS 32

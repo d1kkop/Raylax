@@ -21,7 +21,7 @@
         name<<<blocks, threads>>>( __VA_ARGS__ )
 #else
 #define RL_KERNEL_CALL( bdim, blocks, threads, name, ... ) \
-            Reylax::emulateCpu( bdim, blocks, threads, [=]() { \
+            Reylax::emulateCpu( #name, bdim, blocks, threads, [=]() { \
                 name( __VA_ARGS__ ); \
             })
 #endif
@@ -40,7 +40,7 @@ namespace Reylax
 {
     double time(); 
     void forEachFace(const MeshData** md, u32 numMeshDatas, const std::function<void (u32, const u32[3], const vec3[3])>& cb);
-    void emulateCpu( u32 blockDimension, const dim3& blocks, const dim3& threads, const std::function<void ()>& cb );
+    void emulateCpu( const char* profileName, u32 blockDimension, const dim3& blocks, const dim3& threads, const std::function<void ()>& cb );
     u32  hostOrDeviceCpy( void* dst, const void* src, u32 size, cudaMemcpyKind kind, bool async );
 
 

@@ -1,24 +1,27 @@
 #include "ReylaxCommon.h"
 
-#define BLOCK_THREADS 256
-#define NUM_RAYBOX_QUEUES 32
-#define NUM_LEAF_QUEUES 32
 #define MARCH_EPSILON 0.00001f
-#define NUM_FACE_ITERS 16U
+#define NUM_FACE_ITERS 4U
+
+#define POINTBOX_STOP_QUOTEM 1000U
+#define RAYLEAF_STOP_QUOTEM 0U
 
 #define DBG_QUERIES 0
+#define DBG_SHOW_TILE_ITERS 1
 
 
 #if DBG_QUERIES
-    #define DBG_QUERIES_BEGIN( str ) printf("\n--- %s ---\n", (str))
-    #define DBG_QUERIES_IN( itr, num ) printf("Itr: %d, in %d\n", (itr), (num))
-    #define DBG_QUERIES_OUT( numOut, numOther ) printf("Out: %d, newQueue %d\n", (numOut),(numOther) )
-    #define DBG_QUERIES_END( str) printf("\n--- End %s queries---\n", (str) )
+    #define DBG_QUERIES_BEGIN( str ) u32 i=0; printf("\n--- %s Queries Begin ---\n", (str))
+    #define DBG_QUERIES_IN( itr, num ) printf("Itr: %d, in %d", (itr), (num))
+    #define DBG_QUERIES_OUT( out ) printf(" out: %d\n", (out))
+    #define DBG_QUERIES_END( str, total ) printf("\n--- %s End, num iters: %d ---\n", (str), (total) )
+    #define DBG_QUERIES_RESTART( num ) printf("New Pb queries: %d \n", (num) )
 #else
     #define DBG_QUERIES_BEGIN( str )
     #define DBG_QUERIES_IN( itr, num )
-    #define DBG_QUERIES_OUT( numOut, numOther )
-    #define DBG_QUERIES_END( str)
+    #define DBG_QUERIES_OUT( out )
+    #define DBG_QUERIES_END( str, total )
+    #define DBG_QUERIES_RESTART( num )
 #endif
 
 
@@ -55,7 +58,7 @@ namespace Reylax
             ray->sign[0] = d.x > 0 ? 1 : 0;
             ray->sign[1] = d.y > 0 ? 1 : 0;
             ray->sign[2] = d.z > 0 ? 1 : 0;
-            PointBox* pb = ct.pbQueues[0]->getNew(i, 1);
+            PointBox* pb = ct.pbQueues[ct.pbQueueIn]->getNew(i, 1);
             pb->point    = o + d*(kDist+MARCH_EPSILON);
             pb->localId  = i;
             pb->node     = 0;
@@ -68,14 +71,14 @@ namespace Reylax
         u32 i = bIdx.x * bDim.x + tIdx.x;
         if ( i >= queueLength ) return;
 
-        PointBox* pb = ct.pbQueues[ct.queueIn]->get(ct.id2Queue, i);
+        PointBox* pb = ct.pbQueues[ct.pbQueueIn]->get(ct.id2Queue, i);
         const BvhNode* node = ct.bvhNodes + pb->node;
 
         if ( node->isLeaf() )
         {
             if ( node->numFaces() != 0 )
             {
-                RayLeaf* rl = ct.leafQueues[0]->getNew(i, 1);
+                RayLeaf* rl = ct.leafQueues[ct.rlQueueIn]->getNew(i, 1);
                 rl->pb      = *pb;
                 rl->faceIdx = 0;
             }
@@ -89,7 +92,7 @@ namespace Reylax
                 if ( nextBoxId != RL_INVALID_INDEX )
                 {
                     vec3 dir = ray->d;
-                    PointBox* pbNew = ct.pbQueues[ct.queueOut]->getNew(i, 1);
+                    PointBox* pbNew = ct.pbQueues[ct.pbQueueOut]->getNew(i, 1);
                     pbNew->point    = pnt + dir*(distToBox+MARCH_EPSILON);
                     pbNew->node     = nextBoxId;
                     pbNew->localId  = pb->localId;
@@ -101,7 +104,7 @@ namespace Reylax
         {
             // both must be valid
             assert(RL_VALID_INDEX(node->left) && RL_VALID_INDEX(BVH_GET_INDEX(node->right)));
-            PointBox* pbNew = ct.pbQueues[ct.queueOut]->getNew(i, 1);
+            PointBox* pbNew = ct.pbQueues[ct.pbQueueOut]->getNew(i, 1);
             *pbNew          = *pb;
             u32 spAxis      = BVH_GET_AXIS(node->right);
             float s         = (node->bMax[spAxis] + node->bMin[spAxis])*.5f;
@@ -121,7 +124,7 @@ namespace Reylax
         u32 i = bIdx.x * bDim.x + tIdx.x;
         if ( i >= queueLength ) return;
 
-        RayLeaf* leaf    = ct.leafQueues[ct.queueIn]->get(ct.id2Queue, i);
+        RayLeaf* leaf    = ct.leafQueues[ct.rlQueueIn]->get(ct.id2Queue, i);
         const auto* node = ct.bvhNodes + leaf->pb.node;
         const Ray*  ray  = ct.rayPayload->getFromBase(leaf->pb.ray);
 
@@ -181,7 +184,7 @@ namespace Reylax
         if ( faceIdx < numFaces )
         {
             PointBox pb = leaf->pb;
-            leaf = ct.leafQueues[ct.queueOut]->getNew(i, 1);
+            leaf = ct.leafQueues[ct.rlQueueOut]->getNew(i, 1);
             leaf->pb = pb;
             leaf->faceIdx = faceIdx;
         }
@@ -192,7 +195,7 @@ namespace Reylax
             u32 nextBoxId   = SelectNextBox( bounds, ct.sides + node->right*6, ray->sign, pnt, ray->invd, distToBox );
             if ( nextBoxId != RL_INVALID_INDEX && result->dist > distToBox )
             {
-                PointBox* pb    = ct.pbQueues[0]->getNew(i, 1);
+                PointBox* pb    = ct.pbQueues[ct.pbQueueIn]->getNew(i, 1);
                 pb->point       = pnt + dir*(distToBox+MARCH_EPSILON);
                 pb->node        = nextBoxId;
                 pb->localId     = leaf->pb.localId;
@@ -257,85 +260,98 @@ namespace Reylax
     {
         u32 qlength = qIn->updateToSingleQueue();
     #if RL_USE_INNER_QUEUES
-        dim3 blocks  ((qlength + BLOCK_THREADS-1)/BLOCK_THREADS);
-        dim3 threads (BLOCK_THREADS);
-        RL_KERNEL_CALL(BLOCK_THREADS, blocks, threads, UpdateToInnerQueueKernel, qlength, qIn, id2Queue);
+        dim3 blocks  ((qlength + RL_BLOCK_THREADS-1)/RL_BLOCK_THREADS);
+        dim3 threads (RL_BLOCK_THREADS);
+        RL_KERNEL_CALL(RL_BLOCK_THREADS, blocks, threads, UpdateToInnerQueueKernel, qlength, qIn, id2Queue);
         gridSync();
     #endif
         return qlength;
     }
 
     template <class QIn, class Qout, class Func>
-    DEVICE void DoQueries(const char* queries, u32 queueLength, Store<QIn>** queryQueues, Store<Qout>* remainderQueue, Func f)
+    DEVICE void DoQueries(const char* queries, u32& qIn, u32& qOut, u32 queueLength, u32 quotumThreshold, Store<QIn>** queryQueues, Store<Qout>* remainderQueue, Func f)
     {
-        ct.queueIn  = 0;
-        ct.queueOut = 1;
-        remainderQueue->resetTop();
+     //   ct.pbQueueIn  = 0;
+     //   ct.pbQueueOut = 1;
+     //   remainderQueue->resetTop();
+        assert( qIn != qOut );
 
         DBG_QUERIES_BEGIN(queries);
 
         // if no queries left to solve, quit
-        while ( queueLength!=0 )
+        while ( queueLength > quotumThreshold )
         {
             // ensure top out is set to zero
-            queryQueues[ct.queueOut]->resetTop();
+            queryQueues[qOut]->resetTop();
 
-            DBG_QUERIES_IN(i, queueLength);
+            DBG_QUERIES_IN(i++, queueLength);
 
             // execute all rb queries from queue-in and generate new to queue-out or leaf-queue
-            dim3 blocks  ((queueLength + BLOCK_THREADS-1)/BLOCK_THREADS);
-            dim3 threads (BLOCK_THREADS);
-            RL_KERNEL_CALL(BLOCK_THREADS, blocks, threads, f, queueLength);
+            dim3 blocks  ((queueLength + RL_BLOCK_THREADS-1)/RL_BLOCK_THREADS);
+            dim3 threads (RL_BLOCK_THREADS);
+            RL_KERNEL_CALL(RL_BLOCK_THREADS, blocks, threads, f, queueLength);
             gridSync();
 
-            queueLength = UpdateToSingleQueue( queryQueues[ct.queueOut], ct.id2Queue );
-            DBG_QUERIES_OUT(queueLength, remainderQueue->m_top);
+            queueLength = UpdateToSingleQueue( queryQueues[qOut], ct.id2Queue );
+            DBG_QUERIES_OUT(queueLength);
 
-            ct.queueIn  = (ct.queueIn+1)&1;
-            ct.queueOut = (ct.queueOut+1)&1;
+            qIn  = (qIn+1)&1;
+            qOut = (qOut+1)&1;
+            assert( qIn != qOut );
         }
 
-        DBG_QUERIES_END(queries);
+        DBG_QUERIES_END(queries, i);
     }
 
     GLOBAL void TileKernel(u32 numRays, u32 tileOffset)
     {
         ct.curDepth = 0;
+        ct.pbQueueIn  = 0;
+        ct.pbQueueOut = 1;
+        ct.rlQueueIn  = 0;
+        ct.rlQueueOut = 1;
         ct.rayPayload->resetTop();
         ct.pbQueues[0]->resetTop();
+        ct.pbQueues[1]->resetTop();
+        ct.leafQueues[0]->resetTop();
+        ct.leafQueues[1]->resetTop();
 
-        dim3 threads (BLOCK_THREADS);
-        dim3 blocks  ((numRays + BLOCK_THREADS-1)/BLOCK_THREADS);
-        RL_KERNEL_CALL( BLOCK_THREADS, blocks, threads, SetupRays, numRays, tileOffset );
+        dim3 threads (RL_BLOCK_THREADS);
+        dim3 blocks  ((numRays + RL_BLOCK_THREADS-1)/RL_BLOCK_THREADS);
+        RL_KERNEL_CALL( RL_BLOCK_THREADS, blocks, threads, SetupRays, numRays, tileOffset );
         gridSync();
 
 //        UpdateToSingleQueue( ct.rayPayload, ct.id2RayQueue );
-        u32 queueLength = UpdateToSingleQueue( ct.pbQueues[0], ct.id2Queue );
-        while ( queueLength != 0 && ct.curDepth < ct.maxDepth )
+        u32 queueLength = UpdateToSingleQueue( ct.pbQueues[ct.pbQueueIn], ct.id2Queue );
+        while ( queueLength > POINTBOX_STOP_QUOTEM && ct.curDepth < ct.maxDepth )
         {
-            blocks.x = ((numRays + BLOCK_THREADS-1)/BLOCK_THREADS);
-            RL_KERNEL_CALL( BLOCK_THREADS, blocks, threads, ResetHitResults, numRays );
+            blocks.x = ((numRays + RL_BLOCK_THREADS-1)/RL_BLOCK_THREADS);
+            RL_KERNEL_CALL( RL_BLOCK_THREADS, blocks, threads, ResetHitResults, numRays );
             gridSync();
 
             // Solve all intersections iteratively
             u32 numIters = 0;
-            while ( queueLength != 0 )
+            while ( queueLength > POINTBOX_STOP_QUOTEM )
             {
                 // Iterate Point-box queries until queues are empty
-                DoQueries("Point-box", queueLength, ct.pbQueues, ct.leafQueues[0], PointBoxKernel);
+                DoQueries("Point-box", ct.pbQueueIn, ct.pbQueueOut, queueLength, POINTBOX_STOP_QUOTEM, ct.pbQueues, ct.leafQueues[ct.rlQueueIn], PointBoxKernel);
 
                 // Iterate Ray/leaf queries until queues are empty
-                queueLength = UpdateToSingleQueue( ct.leafQueues[0], ct.id2Queue );
-                DoQueries("Ray-leaf", queueLength, ct.leafQueues, ct.pbQueues[0], RayLeafKernel);
+                queueLength = UpdateToSingleQueue( ct.leafQueues[ct.rlQueueIn], ct.id2Queue );
+                DoQueries("Ray-leaf", ct.rlQueueIn, ct.rlQueueOut, queueLength, RAYLEAF_STOP_QUOTEM, ct.leafQueues, ct.pbQueues[ct.pbQueueIn], RayLeafKernel);
 
-                queueLength = UpdateToSingleQueue( ct.pbQueues[0], ct.id2Queue );
+                queueLength = UpdateToSingleQueue( ct.pbQueues[ct.pbQueueIn], ct.id2Queue );
+                DBG_QUERIES_RESTART( queueLength );
                 numIters++;
             } // End while there are still point-box queries
-        //    printf("-- Num iters for a single tile %d --\n", numIters );
+
+        #if DBG_SHOW_TILE_ITERS
+            printf("-- Num iters tile %d --\n", numIters );
+        #endif
 
             // TODO: For now, for each ray in tile, execute hit result (whether it was hit or not)
-            blocks.x = ((numRays + BLOCK_THREADS-1)/BLOCK_THREADS);
-            RL_KERNEL_CALL(BLOCK_THREADS, blocks, threads, HitCallbackKernel, numRays, tileOffset);
+            blocks.x = ((numRays + RL_BLOCK_THREADS-1)/RL_BLOCK_THREADS);
+            RL_KERNEL_CALL(RL_BLOCK_THREADS, blocks, threads, HitCallbackKernel, numRays, tileOffset);
             gridSync();
             
             ++ct.curDepth;
