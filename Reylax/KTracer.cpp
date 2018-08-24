@@ -3,7 +3,7 @@
 #define MARCH_EPSILON 0.00001f
 #define NUM_FACE_ITERS 4U
 
-#define POINTBOX_STOP_QUOTEM 1000U
+#define POINTBOX_STOP_QUOTEM 0U
 #define RAYLEAF_STOP_QUOTEM 0U
 
 #define DBG_QUERIES 0
@@ -305,7 +305,7 @@ namespace Reylax
 
     GLOBAL void TileKernel(u32 numRays, u32 tileOffset)
     {
-        ct.curDepth = 0;
+        ct.curDepth   = 0;
         ct.pbQueueIn  = 0;
         ct.pbQueueOut = 1;
         ct.rlQueueIn  = 0;

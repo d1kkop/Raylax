@@ -2,6 +2,8 @@
 #include "Reylax_internal.h"
 #include "ReylaxCommon.h"
 #include <chrono>
+#include <thread>
+#include <atomic>
 using namespace std;
 using namespace chrono;
 
@@ -76,6 +78,26 @@ namespace Reylax
             }
         }
     #else
+        //static std::thread tds[16];
+        //u32 total = blocks.x*threads.x;
+        //u32 part = total/16;
+        //assert( total % 16 == 0 );
+        //for ( u32 i=0; i < 16; ++i )
+        //{
+        //    tds[i] = std::thread([=]()
+        //    {
+        //        u32 s = i*part;
+        //        u32 e = s+part;
+        //        for ( u32 j=s; j<e; ++j )
+        //        {
+        //            bIdx.x = j/RL_BLOCK_THREADS;
+        //            tIdx.x = j-(bIdx.x*RL_BLOCK_THREADS);
+        //            cb();
+        //        }
+        //    });
+        //}
+        //for ( auto& t : tds ) 
+        //    t.join();
         concurrency::parallel_for<u32>(0, blocks.x*threads.x, 1, [&](u32 idx)
         {
             bIdx.x = idx/RL_BLOCK_THREADS;
@@ -86,14 +108,14 @@ namespace Reylax
             u32 e = b+bPart;
             if ( e > blocks.x ) e = blocks.x;
             for ( ; b < e; ++b )
-            {
-                bIdx.x = b;
-                for ( u32 t=0; t<threads.x; t++ )
-                {
-                    tIdx.x = t;
-                    cb();
-                }
-            }*/
+            {*/
+            /*              bIdx.x = idx;
+                          for ( u32 t=0; t<threads.x; t++ )
+                          {
+                              tIdx.x = t;
+                              cb();
+                          }*/
+            //}
         });
     #endif
    //     CpuProfiler.stop(profileName);

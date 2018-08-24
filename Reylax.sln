@@ -7,10 +7,9 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Reylax", "Reylax\Reylax.vcx
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Demo", "Demo\Demo.vcxproj", "{D20A2C7F-4AF2-4884-B8DD-F72CE7A76F73}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CudaTest", "CudaTest\CudaTest.vcxproj", "{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}"
+EndProject
 Global
-	GlobalSection(Performance) = preSolution
-		HasPerformanceSessions = true
-	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug_Fast|x64 = Debug_Fast|x64
 		Debug_Fast|x86 = Debug_Fast|x86
@@ -47,12 +46,32 @@ Global
 		{D20A2C7F-4AF2-4884-B8DD-F72CE7A76F73}.Release|x64.ActiveCfg = Release|x64
 		{D20A2C7F-4AF2-4884-B8DD-F72CE7A76F73}.Release|x64.Build.0 = Release|x64
 		{D20A2C7F-4AF2-4884-B8DD-F72CE7A76F73}.Release|x86.ActiveCfg = Release|x64
+		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Debug_Fast|x64.ActiveCfg = Debug|x64
+		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Debug_Fast|x64.Build.0 = Debug|x64
+		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Debug_Fast|x86.ActiveCfg = Release|x64
+		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Debug_Fast|x86.Build.0 = Release|x64
+		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Debug|x64.ActiveCfg = Debug|x64
+		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Debug|x64.Build.0 = Debug|x64
+		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Debug|x86.ActiveCfg = Debug|x64
+		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Profile|x64.ActiveCfg = Release|x64
+		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Profile|x64.Build.0 = Release|x64
+		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Profile|x86.ActiveCfg = Release|x64
+		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Profile|x86.Build.0 = Release|x64
+		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Release|x64.ActiveCfg = Release|x64
+		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Release|x64.Build.0 = Release|x64
+		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Release|x86.ActiveCfg = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {B84E04E3-5B2E-4B98-9CA9-2BD50FF26062}
+	EndGlobalSection
+	GlobalSection(Performance) = preSolution
+		HasPerformanceSessions = true
+	EndGlobalSection
+	GlobalSection(Performance) = preSolution
+		HasPerformanceSessions = true
 	EndGlobalSection
 	GlobalSection(Performance) = preSolution
 		HasPerformanceSessions = true
