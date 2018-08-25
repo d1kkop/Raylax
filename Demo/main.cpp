@@ -21,9 +21,9 @@ double Time() { return static_cast<double>(duration_cast<duration<double, milli>
 extern bool LoadModel(const std::string& name, vector<IMesh*>& meshes);
 
 // In trace.cpp
-extern void UpdateTraceData( const TraceData& td, QueueRayFptr queueRayFptr );
-extern HOST_OR_DEVICE void FirstRays(u32 globalId, u32 localId);
-extern HOST_OR_DEVICE void TraceCallback(u32 globalId, u32 localId, u32 depth, const HitResult& hit, const MeshData* const* meshPtrs);
+void UpdateTraceData( const TraceData& td, QueueRayFptr queueRayFptr );
+RaySetupFptr GetSetupFptr();
+HitResultFptr GetHitFptr();
 
 
 struct Profiler
@@ -158,7 +158,7 @@ struct Program
                 td.orient = camOrient;
                 td.pixels = rt->buffer<u32>();
                 UpdateTraceData( td, tracer->getQueueRayAddress() );
-                err = tracer->trace( numRays, scene, FirstRays, TraceCallback );
+                err = tracer->trace( numRays, scene, GetSetupFptr(), GetHitFptr() );
                 assert(err==0);
             }
             SyncDevice();

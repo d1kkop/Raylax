@@ -18,9 +18,24 @@
 
 #if RL_CUDA
     #define RL_KERNEL_CALL( bdim, blocks, threads, name, ... ) \
+{\
+        name<<<blocks, threads>>>( __VA_ARGS__ );\
+        auto err = cudaGetLastError(); \
+        RL_CUDA_CALL( err ); \
+}
+
+#else
+    #define RL_KERNEL_CALL( bdim, blocks, threads, name, ... ) \
+            Reylax::emulateCpu( #name, bdim, blocks, threads, [=]() { \
+                name( __VA_ARGS__ ); \
+            })
+#endif
+
+#if RL_CUDA_DYN
+    #define RL_KERNEL_CALL_DYN ( bdim, blocks, threads, name, ... ) \
         name<<<blocks, threads>>>( __VA_ARGS__ )
 #else
-#define RL_KERNEL_CALL( bdim, blocks, threads, name, ... ) \
+    #define RL_KERNEL_CALL_DYN( bdim, blocks, threads, name, ... ) \
             Reylax::emulateCpu( #name, bdim, blocks, threads, [=]() { \
                 name( __VA_ARGS__ ); \
             })
@@ -52,6 +67,17 @@ namespace Reylax
         else { RL_CUDA_CALL(cudaMemcpyToSymbol(dst, src, sizeof(T), 0, cudaMemcpyDefault)); }
     #else
         memcpy(&dst, src, sizeof(T));
+    #endif
+    }
+
+    template <typename T>
+    void GetSymbol(void* dst, const T& src, bool wait=true)
+    {
+    #if RL_CUDA
+        if ( !wait ) { RL_CUDA_CALL(cudaMemcpyFromSymbolAsync(dst, src, sizeof(T), 0, cudaMemcpyDeviceToHost)); }
+        else { RL_CUDA_CALL(cudaMemcpyFromSymbol(dst, src, sizeof(T), 0, cudaMemcpyDeviceToHost)); }
+    #else
+        memcpy(dst, &src, sizeof(T));
     #endif
     }
 

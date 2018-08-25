@@ -205,7 +205,7 @@ namespace Reylax
         }
     }
 
-    GLOBAL void TileKernel(u32 numRays,
+    GLOBAL_DYN void TileKernel(u32 numRays,
                            vec3 eye,
                            mat3 orient,
                            Store<RayBox>** rbQueues,

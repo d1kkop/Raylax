@@ -22,7 +22,7 @@
 #include "glm/gtx/transform.hpp"
 #include "glm/gtx/rotate_vector.hpp"
 
-#define DEMO_CPU 1
+#define DEMO_CPU 0
 
 #if !DEMO_CPU
 #define HOST_OR_DEVICE __device__

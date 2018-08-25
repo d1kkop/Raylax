@@ -18,6 +18,5 @@ void rlClear(u32* buffer, u32 numSamples, u32 clearValue)
 {
     dim3 blocks ((numSamples+CLEAR_THREADS-1)/CLEAR_THREADS);
     dim3 threads(CLEAR_THREADS);
-    RL_KERNEL_CALL( CLEAR_THREADS, blocks, threads, rlClearKernel, 
-                    buffer, numSamples, clearValue );
+    RL_KERNEL_CALL( CLEAR_THREADS, blocks, threads, rlClearKernel, buffer, numSamples, clearValue );
 }

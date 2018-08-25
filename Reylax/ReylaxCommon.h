@@ -215,7 +215,7 @@ namespace Reylax
         #endif
         }
 
-        FDEVICE u32 updateToSingleQueue()
+        FDEVICE_DYN u32 updateToSingleQueue()
         {
         #if RL_USE_INNER_QUEUES
             u32 totalLength = 0;

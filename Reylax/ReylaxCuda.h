@@ -8,7 +8,8 @@
 #include "ReylaxTypes.h"
 using namespace glm;
 
-#define RL_CUDA 0
+#define RL_CUDA 1
+#define RL_CUDA_DYN 0
 #define RL_CPU_MT 0
 #define RL_USE_INNER_QUEUES 0
 #define RL_NUMMER_INNER_QUEUES 64
@@ -28,6 +29,16 @@ using namespace glm;
 #define SHARED __shared__
 #define HOST __host__
 
+#if RL_CUDA_DYN
+#define GLOBAL_DYN GLOBAL
+#define DEVICE_DYN DEVICE
+#define FDEVICE_DYN FDEVICE
+#else
+#define GLOBAL_DYN
+#define DEVICE_DYN
+#define FDEVICE_DYN
+#endif
+
 #define bDim blockDim
 #define tIdx threadIdx
 #define bIdx blockIdx
@@ -37,8 +48,11 @@ template <class T> FDEVICE T atomicAdd2(T* t, T v) { return atomicAdd(t, v); }
 #else
 
 #define GLOBAL
+#define GLOBAL_DYN
 #define DEVICE
+#define DEVICE_DYN
 #define FDEVICE
+#define FDEVICE_DYN
 #define THREAD_FENCE()
 #define CONSTANT
 #define INLINE inline

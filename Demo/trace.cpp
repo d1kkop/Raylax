@@ -22,6 +22,19 @@ void SetSymbol(T& dst, const void* src, bool wait=false)
 }
 
 
+template <typename T>
+void GetSymbol(void* dst, const T& src, bool wait=true)
+{
+#if !DEMO_CPU
+    cudaError err;
+    if ( !wait ) err = cudaMemcpyFromSymbolAsync(dst, src, sizeof(T), 0, cudaMemcpyDeviceToHost);
+    else         err = cudaMemcpyFromSymbol(dst, src, sizeof(T), 0, cudaMemcpyDeviceToHost);
+    assert(err==0);
+#else
+    memcpy(dst, &src, sizeof(T));
+#endif
+}
+
 void UpdateTraceData(const TraceData& td, QueueRayFptr queueRayFptr)
 {
     static bool firstTime=true;
@@ -71,9 +84,10 @@ HOST_OR_DEVICE u32 single(float f)
 
 HOST_OR_DEVICE void FirstRays(u32 globalId, u32 localId)
 {
+    printf("yeeey %d %d\n", globalId, localId);
     vec3 dir = /*TD.orient **/ TD.rayDirs[globalId];
     vec3 ori = /*TD.eye;*/ vec3(0,0,-2.5f);
-    QueueRayFunc( &ori.x, &dir.x ); 
+  //  QueueRayFunc( &ori.x, &dir.x ); 
 }
 
 HOST_OR_DEVICE void TraceCallback(u32 globalId, u32 localId, u32 depth,
@@ -83,4 +97,21 @@ HOST_OR_DEVICE void TraceCallback(u32 globalId, u32 localId, u32 depth,
     vec3 n = Interpolate<vec3>(hit, meshPtrs, VERTEX_DATA_NORMAL);
     n = normalize(n);
     TD.pixels[globalId] = single(abs(n.z)) << 16;
+}
+
+
+HOST_OR_DEVICE RaySetupFptr firstRaysFptr = FirstRays;
+RaySetupFptr GetSetupFptr()
+{
+    RaySetupFptr res;
+    GetSymbol(&res, firstRaysFptr);
+    return res;
+}
+
+HOST_OR_DEVICE HitResultFptr hitResultFptr = TraceCallback;
+HitResultFptr GetHitFptr()
+{
+    HitResultFptr res;
+    GetSymbol(&res, hitResultFptr);
+    return res;
 }

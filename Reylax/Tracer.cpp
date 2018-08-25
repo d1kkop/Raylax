@@ -7,9 +7,9 @@ using namespace std;
 
 namespace Reylax
 {
-    GLOBAL void TileKernel(u32 numRays, u32 tileOffset);
-    DEVICE void QueueRay(const float* ori, const float* dir);
-    extern void UpdateTraceContext(const TracerContext& ct, bool wait);
+    GLOBAL_DYN void TileKernel(u32 numRays, u32 tileOffset);
+    QueueRayFptr GetQueueRayFptr();
+    void UpdateTraceContext(const TracerContext& ct, bool wait);
 
     Profiler CpuProfiler;
 
@@ -147,7 +147,7 @@ namespace Reylax
             u32 numRaysTile = min( m_numRaysPerTile, numRays-tileOffset );
 
             CpuProfiler.start();
-            RL_KERNEL_CALL( 1, 1, 1, TileKernel, numRaysTile, tileOffset );
+            RL_KERNEL_CALL_DYN( 1, 1, 1, TileKernel, numRaysTile, tileOffset );
             CpuProfiler.stop( "Tile " + to_string(kTile) );
 
             kTile++;
@@ -161,6 +161,6 @@ namespace Reylax
 
     QueueRayFptr Tracer::getQueueRayAddress() const
     {
-        return QueueRay;
+        return GetQueueRayFptr();
     }
 }

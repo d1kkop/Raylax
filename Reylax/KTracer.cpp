@@ -28,21 +28,32 @@
 namespace Reylax
 {
     DEVICE CONSTANT TracerContext ct;
+    
+
+#if !RL_CUDA_DYN
+    TracerContext h_ct;
+#else
+    #define h_ct ct
+#endif
 
     void UpdateTraceContext(const TracerContext& newCt, bool wait)
     {
         SetSymbol( ct, &newCt );
+    #if !RL_CUDA_DYN
+        h_ct = newCt;
+    #endif
     }
 
-    FDEVICE void gridSync()
+    DEVICE_DYN void dynamicSync()
     {
-    #if RL_CUDA
+    #if RL_CUDA_DYN
         cudaDeviceSynchronize();
     #endif
     }
 
     DEVICE void QueueRay(const float* ori3, const float* dir3)
     {
+        return;
         // Only if we hit root box of tree, an intersection can take place.
         vec3 o = *(vec3*)ori3;
         vec3 d = *(vec3*)dir3;
@@ -64,6 +75,14 @@ namespace Reylax
             pb->node     = 0;
             pb->ray      = (u32)(ray - ct.rayPayload->m_elements);
         }
+    }
+
+    DEVICE CONSTANT QueueRayFptr queueRayFptr = QueueRay;
+    QueueRayFptr GetQueueRayFptr()
+    {
+        QueueRayFptr rval;
+        GetSymbol( &rval, queueRayFptr );
+        return rval;
     }
 
     GLOBAL void PointBoxKernel(u32 queueLength)
@@ -209,6 +228,8 @@ namespace Reylax
         u32 localId = bIdx.x * bDim.x + tIdx.x;
         if ( localId >= numRays ) return;
         u32 globalId = tileOffset + localId;
+        assert( ct.setupCb );
+        printf("Setup Fptr = %p\n", ct.setupCb );
         ct.setupCb( globalId, localId );
     }
 
@@ -227,6 +248,8 @@ namespace Reylax
         u32 globalId = tileOffset + localId;
         const HitResult& hit = ct.hitResults[localId];
         //Ray* ray = ct.rayPayload->get( hit.ray );
+        assert ( ct.hitCb );
+        printf("Fptr = %p\n", ct.hitCb );
         ct.hitCb( globalId, localId, ct.curDepth, hit, ct.meshDataPtrs );
     }
 
@@ -256,24 +279,38 @@ namespace Reylax
     }
 
     template <class QIn>
-    FDEVICE u32 UpdateToSingleQueue(QIn& qIn, byte* id2Queue)
+    DEVICE_DYN u32 UpdateToSingleQueue(QIn& qIn, byte* id2Queue)
     {
+    #if RL_CUDA_DYN
         u32 qlength = qIn->updateToSingleQueue();
     #if RL_USE_INNER_QUEUES
         dim3 blocks  ((qlength + RL_BLOCK_THREADS-1)/RL_BLOCK_THREADS);
         dim3 threads (RL_BLOCK_THREADS);
         RL_KERNEL_CALL(RL_BLOCK_THREADS, blocks, threads, UpdateToInnerQueueKernel, qlength, qIn, id2Queue);
-        gridSync();
+        dynamicSync();
     #endif
         return qlength;
+    #else
+        u32 queueLength = 0;
+        Reylax::hostOrDeviceCpy(&queueLength, ((char*)qIn) + offsetof(Store<PointBox>, m_top), 4, cudaMemcpyDeviceToHost, false);
+        return queueLength;
+    #endif
+    }
+
+    template <class QIn>
+    DEVICE_DYN void SetQueueTopZero(QIn& dQueue)
+    {
+    #if RL_CUDA_DYN
+        dQueue->resetTop();
+    #else
+        u32 zero = 0;
+        Reylax::hostOrDeviceCpy(((char*)dQueue) + offsetof(Store<PointBox>, m_top), &zero, 4, cudaMemcpyHostToDevice, true);
+    #endif
     }
 
     template <class QIn, class Qout, class Func>
-    DEVICE void DoQueries(const char* queries, u32& qIn, u32& qOut, u32 queueLength, u32 quotumThreshold, Store<QIn>** queryQueues, Store<Qout>* remainderQueue, Func f)
+    DEVICE_DYN void DoQueries(const char* queries, u32& qIn, u32& qOut, u32 queueLength, u32 quotumThreshold, Store<QIn>** queryQueues, Store<Qout>* remainderQueue, Func f)
     {
-     //   ct.pbQueueIn  = 0;
-     //   ct.pbQueueOut = 1;
-     //   remainderQueue->resetTop();
         assert( qIn != qOut );
 
         DBG_QUERIES_BEGIN(queries);
@@ -282,7 +319,7 @@ namespace Reylax
         while ( queueLength > quotumThreshold )
         {
             // ensure top out is set to zero
-            queryQueues[qOut]->resetTop();
+            SetQueueTopZero( queryQueues[qOut] );
 
             DBG_QUERIES_IN(i++, queueLength);
 
@@ -290,9 +327,9 @@ namespace Reylax
             dim3 blocks  ((queueLength + RL_BLOCK_THREADS-1)/RL_BLOCK_THREADS);
             dim3 threads (RL_BLOCK_THREADS);
             RL_KERNEL_CALL(RL_BLOCK_THREADS, blocks, threads, f, queueLength);
-            gridSync();
+            dynamicSync();
 
-            queueLength = UpdateToSingleQueue( queryQueues[qOut], ct.id2Queue );
+            queueLength = UpdateToSingleQueue( queryQueues[qOut], h_ct.id2Queue );
             DBG_QUERIES_OUT(queueLength);
 
             qIn  = (qIn+1)&1;
@@ -303,44 +340,49 @@ namespace Reylax
         DBG_QUERIES_END(queries, i);
     }
 
-    GLOBAL void TileKernel(u32 numRays, u32 tileOffset)
+    // TODO helper kernel , can be put in TileKernel when can be run on GPU
+    FDEVICE_DYN void PrepareKernel()
     {
-        ct.curDepth   = 0;
-        ct.pbQueueIn  = 0;
-        ct.pbQueueOut = 1;
-        ct.rlQueueIn  = 0;
-        ct.rlQueueOut = 1;
-        ct.rayPayload->resetTop();
-        ct.pbQueues[0]->resetTop();
-        ct.pbQueues[1]->resetTop();
-        ct.leafQueues[0]->resetTop();
-        ct.leafQueues[1]->resetTop();
+        h_ct.curDepth   = 0;
+        h_ct.pbQueueIn  = 0;
+        h_ct.pbQueueOut = 1;
+        h_ct.rlQueueIn  = 0;
+        h_ct.rlQueueOut = 1;
+        SetQueueTopZero( h_ct.rayPayload );
+        SetQueueTopZero( h_ct.pbQueues[0] );
+        SetQueueTopZero( h_ct.pbQueues[1] );
+        SetQueueTopZero( h_ct.leafQueues[0] );
+        SetQueueTopZero( h_ct.leafQueues[1] );
+    }
+
+    GLOBAL_DYN void TileKernel(u32 numRays, u32 tileOffset)
+    {
+        PrepareKernel();
 
         dim3 threads (RL_BLOCK_THREADS);
         dim3 blocks  ((numRays + RL_BLOCK_THREADS-1)/RL_BLOCK_THREADS);
         RL_KERNEL_CALL( RL_BLOCK_THREADS, blocks, threads, SetupRays, numRays, tileOffset );
-        gridSync();
+        dynamicSync();
 
-//        UpdateToSingleQueue( ct.rayPayload, ct.id2RayQueue );
-        u32 queueLength = UpdateToSingleQueue( ct.pbQueues[ct.pbQueueIn], ct.id2Queue );
-        while ( queueLength > POINTBOX_STOP_QUOTEM && ct.curDepth < ct.maxDepth )
+        u32 queueLength = UpdateToSingleQueue( h_ct.pbQueues[h_ct.pbQueueIn], h_ct.id2Queue );
+        while ( queueLength > POINTBOX_STOP_QUOTEM && h_ct.curDepth < h_ct.maxDepth )
         {
             blocks.x = ((numRays + RL_BLOCK_THREADS-1)/RL_BLOCK_THREADS);
             RL_KERNEL_CALL( RL_BLOCK_THREADS, blocks, threads, ResetHitResults, numRays );
-            gridSync();
+            dynamicSync();
 
             // Solve all intersections iteratively
             u32 numIters = 0;
             while ( queueLength > POINTBOX_STOP_QUOTEM )
             {
                 // Iterate Point-box queries until queues are empty
-                DoQueries("Point-box", ct.pbQueueIn, ct.pbQueueOut, queueLength, POINTBOX_STOP_QUOTEM, ct.pbQueues, ct.leafQueues[ct.rlQueueIn], PointBoxKernel);
+                DoQueries("Point-box", h_ct.pbQueueIn, h_ct.pbQueueOut, queueLength, POINTBOX_STOP_QUOTEM, h_ct.pbQueues, h_ct.leafQueues[h_ct.rlQueueIn], PointBoxKernel);
 
                 // Iterate Ray/leaf queries until queues are empty
-                queueLength = UpdateToSingleQueue( ct.leafQueues[ct.rlQueueIn], ct.id2Queue );
-                DoQueries("Ray-leaf", ct.rlQueueIn, ct.rlQueueOut, queueLength, RAYLEAF_STOP_QUOTEM, ct.leafQueues, ct.pbQueues[ct.pbQueueIn], RayLeafKernel);
+                queueLength = UpdateToSingleQueue( h_ct.leafQueues[h_ct.rlQueueIn], h_ct.id2Queue );
+                DoQueries("Ray-leaf", h_ct.rlQueueIn, h_ct.rlQueueOut, queueLength, RAYLEAF_STOP_QUOTEM, h_ct.leafQueues, h_ct.pbQueues[h_ct.pbQueueIn], RayLeafKernel);
 
-                queueLength = UpdateToSingleQueue( ct.pbQueues[ct.pbQueueIn], ct.id2Queue );
+                queueLength = UpdateToSingleQueue( h_ct.pbQueues[h_ct.pbQueueIn], h_ct.id2Queue );
                 DBG_QUERIES_RESTART( queueLength );
                 numIters++;
             } // End while there are still point-box queries
@@ -352,9 +394,9 @@ namespace Reylax
             // TODO: For now, for each ray in tile, execute hit result (whether it was hit or not)
             blocks.x = ((numRays + RL_BLOCK_THREADS-1)/RL_BLOCK_THREADS);
             RL_KERNEL_CALL(RL_BLOCK_THREADS, blocks, threads, HitCallbackKernel, numRays, tileOffset);
-            gridSync();
+            dynamicSync();
             
-            ++ct.curDepth;
+            ++h_ct.curDepth;
             queueLength = 0; // TODO hard quit no recursion
         }
     }
