@@ -19,8 +19,6 @@
       <Filter>support</Filter>
     </ClCompile>
     <ClCompile Include="main.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <CudaCompile Include="trace.cpp" />
+    <ClCompile Include="trace.cpp" />
   </ItemGroup>
 </Project>

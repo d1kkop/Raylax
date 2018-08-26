@@ -140,5 +140,4 @@ namespace Reylax
         return ERROR_ALL_FINE;
     #endif
     }
-
 }

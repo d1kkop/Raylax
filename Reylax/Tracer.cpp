@@ -8,8 +8,8 @@ using namespace std;
 namespace Reylax
 {
     GLOBAL_DYN void TileKernel(u32 numRays, u32 tileOffset);
-    QueueRayFptr GetQueueRayFptr();
     void UpdateTraceContext(const TracerContext& ct, bool wait);
+    void UpdateTraceData(const vec3& eye, mat3& orient, vec3* rays, u32* pixels);
 
     Profiler CpuProfiler;
 
@@ -67,10 +67,10 @@ namespace Reylax
       //  m_id2RayQueue = new DeviceBuffer(sizeof(char)*m_numRaysPerTile);
 
         m_ctx.rayPayload    = m_rayQueue->ptr<Store<Ray>>();
-        m_ctx.pbQueues[0]   = m_pointBoxQueue[0]->ptr<Store<PointBox>>();
-        m_ctx.pbQueues[1]   = m_pointBoxQueue[1]->ptr<Store<PointBox>>();
-        m_ctx.leafQueues[0] = m_leafQueue[0]->ptr<Store<RayLeaf>>();
-        m_ctx.leafQueues[1] = m_leafQueue[1]->ptr<Store<RayLeaf>>();
+        m_ctx.pbQueueIn     = m_pointBoxQueue[0]->ptr<Store<PointBox>>();
+        m_ctx.pbQueueOut    = m_pointBoxQueue[1]->ptr<Store<PointBox>>();
+        m_ctx.leafQueueIn   = m_leafQueue[0]->ptr<Store<RayLeaf>>();
+        m_ctx.leafQueueOut  = m_leafQueue[1]->ptr<Store<RayLeaf>>();
         m_ctx.hitResults    = m_hitResults->ptr<HitResult>();
         m_ctx.id2Queue      = m_id2Queue->ptr<byte>();
      //   m_ctx.id2RayQueue   = m_id2RayQueue->ptr<char>();
@@ -109,7 +109,7 @@ namespace Reylax
 
     u32 Tracer::trace(u32 numRays, const IGpuStaticScene* scene, RaySetupFptr setupCb, HitResultFptr hitCb)
     {
-        if ( !scene || !setupCb || !hitCb )
+        if ( !scene /*|| !setupCb || !hitCb*/ )
         {
             return ERROR_INVALID_PARAMETER;
         }
@@ -159,8 +159,14 @@ namespace Reylax
         return ERROR_ALL_FINE;
     }
 
+    u32 Tracer::trace2(u32 numRays, const IGpuStaticScene* scene, const float* eye3, const float* orient3x3, const float* rays3, const u32* pixels)
+    {
+        UpdateTraceData( (vec3&)*eye3, (mat3&)*orient3x3, (vec3*)rays3, (u32*)pixels );
+        return trace( numRays, scene, nullptr, nullptr );
+    }
+
     QueueRayFptr Tracer::getQueueRayAddress() const
     {
-        return GetQueueRayFptr();
+        return nullptr;
     }
 }

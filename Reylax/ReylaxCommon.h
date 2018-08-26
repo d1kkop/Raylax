@@ -189,10 +189,10 @@ namespace Reylax
         FDEVICE bool validate(u32 newTop) const
         {
         #if RL_USE_INNER_QUEUES
-            if ( newTop > m_partMax ) printf("m_top = %d, part_max = %d\n", newTop, m_partMax);
+            if ( newTop > m_partMax ) printf("m_top = %d, part_max = %d | %s\n", newTop, m_partMax, __FUNCTION__);
             return newTop <= m_partMax;
         #else
-            if ( newTop > m_max ) printf("m_top = %d, total_max = %d\n", newTop, m_max);
+            if ( newTop > m_max ) printf("m_top = %d, total_max = %d | %s\n", newTop, m_max, __FUNCTION__);
             return newTop <= m_max;
         #endif
         }
@@ -237,16 +237,13 @@ namespace Reylax
     {
         vec3 bMin, bMax;
         Store<Ray>*      rayPayload;
-        Store<PointBox>* pbQueues[2];
-        Store<RayLeaf>*  leafQueues[2];
+        Store<PointBox>* pbQueueIn, * pbQueueOut;
+        Store<RayLeaf>*  leafQueueIn, * leafQueueOut;
         const BvhNode* bvhNodes;
         const Face* faces;
         const FaceCluster* faceClusters;
         const u32* sides;
         const MeshData* const* meshDataPtrs;
-        // -- Changes every kernel run 0, to 1 ---
-        u32 pbQueueIn, pbQueueOut;
-        u32 rlQueueIn, rlQueueOut;
         // Output
         HitResult* hitResults;
         // Mapping

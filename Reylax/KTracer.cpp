@@ -28,6 +28,9 @@
 namespace Reylax
 {
     DEVICE CONSTANT TracerContext ct;
+
+    DEVICE void FirstRays(u32 globalId, u32 localId, Store<PointBox>* pbIn);
+    DEVICE void TraceCallback(u32 globalId, u32 localId, u32 depth, const HitResult& hit, const MeshData* const* meshPtrs);
     
 
 #if !RL_CUDA_DYN
@@ -51,9 +54,8 @@ namespace Reylax
     #endif
     }
 
-    DEVICE void QueueRay(const float* ori3, const float* dir3)
+    DEVICE void QueueRay(const float* ori3, const float* dir3, Store<PointBox>* pbIn)
     {
-        return;
         // Only if we hit root box of tree, an intersection can take place.
         vec3 o = *(vec3*)ori3;
         vec3 d = *(vec3*)dir3;
@@ -69,7 +71,7 @@ namespace Reylax
             ray->sign[0] = d.x > 0 ? 1 : 0;
             ray->sign[1] = d.y > 0 ? 1 : 0;
             ray->sign[2] = d.z > 0 ? 1 : 0;
-            PointBox* pb = ct.pbQueues[ct.pbQueueIn]->getNew(i, 1);
+            PointBox* pb = pbIn->getNew(i, 1);
             pb->point    = o + d*(kDist+MARCH_EPSILON);
             pb->localId  = i;
             pb->node     = 0;
@@ -77,27 +79,19 @@ namespace Reylax
         }
     }
 
-    DEVICE CONSTANT QueueRayFptr queueRayFptr = QueueRay;
-    QueueRayFptr GetQueueRayFptr()
-    {
-        QueueRayFptr rval;
-        GetSymbol( &rval, queueRayFptr );
-        return rval;
-    }
-
-    GLOBAL void PointBoxKernel(u32 queueLength)
+    GLOBAL void PointBoxKernel(u32 queueLength, Store<PointBox>* pbIn, Store<PointBox>* pbOut, Store<RayLeaf>* leafOut)
     {
         u32 i = bIdx.x * bDim.x + tIdx.x;
         if ( i >= queueLength ) return;
 
-        PointBox* pb = ct.pbQueues[ct.pbQueueIn]->get(ct.id2Queue, i);
+        PointBox* pb = pbIn->get(ct.id2Queue, i);
         const BvhNode* node = ct.bvhNodes + pb->node;
 
         if ( node->isLeaf() )
         {
             if ( node->numFaces() != 0 )
             {
-                RayLeaf* rl = ct.leafQueues[ct.rlQueueIn]->getNew(i, 1);
+                RayLeaf* rl = leafOut->getNew(i, 1);
                 rl->pb      = *pb;
                 rl->faceIdx = 0;
             }
@@ -111,7 +105,7 @@ namespace Reylax
                 if ( nextBoxId != RL_INVALID_INDEX )
                 {
                     vec3 dir = ray->d;
-                    PointBox* pbNew = ct.pbQueues[ct.pbQueueOut]->getNew(i, 1);
+                    PointBox* pbNew = pbOut->getNew(i, 1);
                     pbNew->point    = pnt + dir*(distToBox+MARCH_EPSILON);
                     pbNew->node     = nextBoxId;
                     pbNew->localId  = pb->localId;
@@ -123,7 +117,7 @@ namespace Reylax
         {
             // both must be valid
             assert(RL_VALID_INDEX(node->left) && RL_VALID_INDEX(BVH_GET_INDEX(node->right)));
-            PointBox* pbNew = ct.pbQueues[ct.pbQueueOut]->getNew(i, 1);
+            PointBox* pbNew = pbOut->getNew(i, 1);
             *pbNew          = *pb;
             u32 spAxis      = BVH_GET_AXIS(node->right);
             float s         = (node->bMax[spAxis] + node->bMin[spAxis])*.5f;
@@ -138,12 +132,12 @@ namespace Reylax
         }
     }
 
-    GLOBAL void RayLeafKernel(u32 queueLength)
+    GLOBAL void RayLeafKernel(u32 queueLength, Store<RayLeaf>* leafIn, Store<RayLeaf>* leafOut, Store<PointBox>* pbOut)
     {
         u32 i = bIdx.x * bDim.x + tIdx.x;
         if ( i >= queueLength ) return;
 
-        RayLeaf* leaf    = ct.leafQueues[ct.rlQueueIn]->get(ct.id2Queue, i);
+        RayLeaf* leaf    = leafIn->get(ct.id2Queue, i);
         const auto* node = ct.bvhNodes + leaf->pb.node;
         const Ray*  ray  = ct.rayPayload->getFromBase(leaf->pb.ray);
 
@@ -203,7 +197,7 @@ namespace Reylax
         if ( faceIdx < numFaces )
         {
             PointBox pb = leaf->pb;
-            leaf = ct.leafQueues[ct.rlQueueOut]->getNew(i, 1);
+            leaf = leafOut->getNew(i, 1);
             leaf->pb = pb;
             leaf->faceIdx = faceIdx;
         }
@@ -214,7 +208,7 @@ namespace Reylax
             u32 nextBoxId   = SelectNextBox( bounds, ct.sides + node->right*6, ray->sign, pnt, ray->invd, distToBox );
             if ( nextBoxId != RL_INVALID_INDEX && result->dist > distToBox )
             {
-                PointBox* pb    = ct.pbQueues[ct.pbQueueIn]->getNew(i, 1);
+                PointBox* pb    = pbOut->getNew(i, 1);
                 pb->point       = pnt + dir*(distToBox+MARCH_EPSILON);
                 pb->node        = nextBoxId;
                 pb->localId     = leaf->pb.localId;
@@ -223,14 +217,15 @@ namespace Reylax
         }
     }
 
-    GLOBAL void SetupRays(u32 numRays, u32 tileOffset)
+    GLOBAL void SetupRays(u32 numRays, u32 tileOffset, Store<PointBox>* pbIn)
     {
         u32 localId = bIdx.x * bDim.x + tIdx.x;
         if ( localId >= numRays ) return;
         u32 globalId = tileOffset + localId;
-        assert( ct.setupCb );
+        FirstRays( globalId, localId, pbIn );
+        /*assert( ct.setupCb );
         printf("Setup Fptr = %p\n", ct.setupCb );
-        ct.setupCb( globalId, localId );
+        ct.setupCb( globalId, localId );*/
     }
 
     GLOBAL void ResetHitResults(u32 numRays)
@@ -247,10 +242,11 @@ namespace Reylax
         if ( ct.hitResults[localId].dist == FLT_MAX ) return;
         u32 globalId = tileOffset + localId;
         const HitResult& hit = ct.hitResults[localId];
+        TraceCallback( globalId, localId, ct.curDepth, hit, ct.meshDataPtrs );
         //Ray* ray = ct.rayPayload->get( hit.ray );
-        assert ( ct.hitCb );
+        /*assert ( ct.hitCb );
         printf("Fptr = %p\n", ct.hitCb );
-        ct.hitCb( globalId, localId, ct.curDepth, hit, ct.meshDataPtrs );
+        ct.hitCb( globalId, localId, ct.curDepth, hit, ct.meshDataPtrs );*/
     }
 
     template <class QIn>
@@ -291,68 +287,78 @@ namespace Reylax
     #endif
         return qlength;
     #else
+        return GetQueueTop(qIn);
+    #endif
+    }
+
+    template <class QIn>
+    DEVICE_DYN u32 GetQueueTop(QIn& dQueue)
+    {
+    #if RL_CUDA_DYN
+        return dQueue->updateToSingleQueue();
+    #else
         u32 queueLength = 0;
-        Reylax::hostOrDeviceCpy(&queueLength, ((char*)qIn) + offsetof(Store<PointBox>, m_top), 4, cudaMemcpyDeviceToHost, false);
+        u32 err = hostOrDeviceCpy(&queueLength, ((char*)dQueue) + offsetof(Store<PointBox>, m_top), 4, cudaMemcpyDeviceToHost, false);
+        assert(err==0);
         return queueLength;
     #endif
     }
 
     template <class QIn>
-    DEVICE_DYN void SetQueueTopZero(QIn& dQueue)
+    DEVICE_DYN void SetQueueTop(QIn& dQueue, u32 val=0)
     {
     #if RL_CUDA_DYN
         dQueue->resetTop();
     #else
-        u32 zero = 0;
-        Reylax::hostOrDeviceCpy(((char*)dQueue) + offsetof(Store<PointBox>, m_top), &zero, 4, cudaMemcpyHostToDevice, true);
+        u32 err = hostOrDeviceCpy(((char*)dQueue) + offsetof(Store<PointBox>, m_top), &val, 4, cudaMemcpyHostToDevice, true);
+        assert(err==0);
     #endif
     }
 
     template <class QIn, class Qout, class Func>
-    DEVICE_DYN void DoQueries(const char* queries, u32& qIn, u32& qOut, u32 queueLength, u32 quotumThreshold, Store<QIn>** queryQueues, Store<Qout>* remainderQueue, Func f)
+    DEVICE_DYN void DoQueries(const char* queriesName, u32 queueLength, u32 quotumThreshold, 
+                              Store<QIn>*& queueIn, Store<QIn>*& queueOut, Store<Qout>* remainderQueue, Func f)
     {
-        assert( qIn != qOut );
+        assert( queueIn != queueOut );
 
-        DBG_QUERIES_BEGIN(queries);
+        DBG_QUERIES_BEGIN(queriesName);
 
         // if no queries left to solve, quit
         while ( queueLength > quotumThreshold )
         {
             // ensure top out is set to zero
-            SetQueueTopZero( queryQueues[qOut] );
+            SetQueueTop( queueOut );
 
             DBG_QUERIES_IN(i++, queueLength);
 
             // execute all rb queries from queue-in and generate new to queue-out or leaf-queue
             dim3 blocks  ((queueLength + RL_BLOCK_THREADS-1)/RL_BLOCK_THREADS);
             dim3 threads (RL_BLOCK_THREADS);
-            RL_KERNEL_CALL(RL_BLOCK_THREADS, blocks, threads, f, queueLength);
+            RL_KERNEL_CALL(RL_BLOCK_THREADS, blocks, threads, f, queueLength, queueIn, queueOut, remainderQueue);
             dynamicSync();
 
-            queueLength = UpdateToSingleQueue( queryQueues[qOut], h_ct.id2Queue );
+            queueLength = UpdateToSingleQueue( queueOut, h_ct.id2Queue );
             DBG_QUERIES_OUT(queueLength);
 
-            qIn  = (qIn+1)&1;
-            qOut = (qOut+1)&1;
-            assert( qIn != qOut );
+            // Swap queues
+            auto* qTemp = queueIn;
+            queueIn  = queueOut;
+            queueOut = qTemp;
+            assert( queueIn != queueOut );
         }
 
-        DBG_QUERIES_END(queries, i);
+        DBG_QUERIES_END(queriesName, i);
     }
 
     // TODO helper kernel , can be put in TileKernel when can be run on GPU
     FDEVICE_DYN void PrepareKernel()
     {
-        h_ct.curDepth   = 0;
-        h_ct.pbQueueIn  = 0;
-        h_ct.pbQueueOut = 1;
-        h_ct.rlQueueIn  = 0;
-        h_ct.rlQueueOut = 1;
-        SetQueueTopZero( h_ct.rayPayload );
-        SetQueueTopZero( h_ct.pbQueues[0] );
-        SetQueueTopZero( h_ct.pbQueues[1] );
-        SetQueueTopZero( h_ct.leafQueues[0] );
-        SetQueueTopZero( h_ct.leafQueues[1] );
+        h_ct.curDepth = 0;
+        SetQueueTop( h_ct.rayPayload );
+        SetQueueTop( h_ct.pbQueueIn );
+        SetQueueTop( h_ct.pbQueueOut );
+        SetQueueTop( h_ct.leafQueueIn );
+        SetQueueTop( h_ct.leafQueueOut );
     }
 
     GLOBAL_DYN void TileKernel(u32 numRays, u32 tileOffset)
@@ -361,10 +367,10 @@ namespace Reylax
 
         dim3 threads (RL_BLOCK_THREADS);
         dim3 blocks  ((numRays + RL_BLOCK_THREADS-1)/RL_BLOCK_THREADS);
-        RL_KERNEL_CALL( RL_BLOCK_THREADS, blocks, threads, SetupRays, numRays, tileOffset );
+        RL_KERNEL_CALL( RL_BLOCK_THREADS, blocks, threads, SetupRays, numRays, tileOffset, h_ct.pbQueueIn );
         dynamicSync();
 
-        u32 queueLength = UpdateToSingleQueue( h_ct.pbQueues[h_ct.pbQueueIn], h_ct.id2Queue );
+        u32 queueLength = UpdateToSingleQueue( h_ct.pbQueueIn, h_ct.id2Queue );
         while ( queueLength > POINTBOX_STOP_QUOTEM && h_ct.curDepth < h_ct.maxDepth )
         {
             blocks.x = ((numRays + RL_BLOCK_THREADS-1)/RL_BLOCK_THREADS);
@@ -376,13 +382,13 @@ namespace Reylax
             while ( queueLength > POINTBOX_STOP_QUOTEM )
             {
                 // Iterate Point-box queries until queues are empty
-                DoQueries("Point-box", h_ct.pbQueueIn, h_ct.pbQueueOut, queueLength, POINTBOX_STOP_QUOTEM, h_ct.pbQueues, h_ct.leafQueues[h_ct.rlQueueIn], PointBoxKernel);
+                DoQueries("Point-box", queueLength, POINTBOX_STOP_QUOTEM, h_ct.pbQueueIn, h_ct.pbQueueOut, h_ct.leafQueueIn, PointBoxKernel);
 
                 // Iterate Ray/leaf queries until queues are empty
-                queueLength = UpdateToSingleQueue( h_ct.leafQueues[h_ct.rlQueueIn], h_ct.id2Queue );
-                DoQueries("Ray-leaf", h_ct.rlQueueIn, h_ct.rlQueueOut, queueLength, RAYLEAF_STOP_QUOTEM, h_ct.leafQueues, h_ct.pbQueues[h_ct.pbQueueIn], RayLeafKernel);
+                queueLength = UpdateToSingleQueue( h_ct.leafQueueIn, h_ct.id2Queue );
+                DoQueries("Ray-leaf", queueLength, RAYLEAF_STOP_QUOTEM, h_ct.leafQueueIn, h_ct.leafQueueOut, h_ct.pbQueueIn, RayLeafKernel );
 
-                queueLength = UpdateToSingleQueue( h_ct.pbQueues[h_ct.pbQueueIn], h_ct.id2Queue );
+                queueLength = UpdateToSingleQueue( h_ct.pbQueueIn, h_ct.id2Queue );
                 DBG_QUERIES_RESTART( queueLength );
                 numIters++;
             } // End while there are still point-box queries
@@ -401,4 +407,87 @@ namespace Reylax
         }
     }
 
+}
+
+// ------------------------------------ user trace -------------------------------------------------------------
+
+
+
+namespace Reylax
+{
+    __align__(8)
+    struct TraceData
+    {
+        vec3 eye;
+        mat3 orient;
+        vec3* rayDirs;
+        u32*  pixels;
+    };
+
+    DEVICE TraceData TD;
+
+
+    void UpdateTraceData(const vec3& eye, mat3& orient, vec3* rays, u32* pixels)
+    {
+        TraceData td;
+        td.eye = eye;
+        td.orient  = orient;
+        td.rayDirs = rays;
+        td.pixels  = pixels;
+        Reylax::SetSymbol(TD, &td);
+    }
+
+    template <class T>
+    DEVICE T Interpolate(const HitResult& hit, const MeshData* const* meshPtrs, u32 dataIdx)
+    {
+        assert(meshPtrs);
+        assert(dataIdx < VERTEX_DATA_COUNT);
+        const MeshData* mesh = meshPtrs[hit.face->w];
+        const T* vd  = (const T*)(mesh->vertexData[dataIdx]);
+        const T& vd1 = vd[hit.face->x];
+        const T& vd2 = vd[hit.face->y];
+        const T& vd3 = vd[hit.face->z];
+        float u = hit.u;
+        float v = hit.v;
+        float w = 1-(u+v);
+        return w*vd1 + u*vd2 + v*vd3;
+    }
+
+    DEVICE u32 rgba(const vec4& c)
+    {
+        u32 r = (u32)(c.x*255.f);
+        u32 g = (u32)(c.y*255.f);
+        u32 b = (u32)(c.z*255.f);
+        u32 a = (u32)(c.w*255.f);
+        if ( r > 255 ) r = 255;
+        if ( g > 255 ) g = 255;
+        if ( b > 255 ) b = 255;
+        if ( a > 255 ) a = 255;
+        return (a<<24)|(r<<16)|(g<<8)|(b);
+    }
+
+    DEVICE u32 single(float f)
+    {
+        u32 r = (u32)(f*255.f);
+        if ( r > 255 ) r = 255;
+        return r;
+    }
+
+    DEVICE void FirstRays(u32 globalId, u32 localId, Store<PointBox>* pbIn)
+    {
+        //printf("yeeey %d %d\n", globalId, localId);
+        vec3 dir = /*TD.orient **/ TD.rayDirs[globalId];
+        vec3 ori = /*TD.eye;*/ vec3(0, 0, -2.5f);
+        QueueRay(&ori.x, &dir.x, pbIn);
+        //  QueueRayFunc( &ori.x, &dir.x ); 
+    }
+
+    DEVICE void TraceCallback(u32 globalId, u32 localId, u32 depth,
+                              const HitResult& hit,
+                              const MeshData* const* meshPtrs)
+    {
+        vec3 n = Interpolate<vec3>(hit, meshPtrs, VERTEX_DATA_NORMAL);
+        n = normalize(n);
+        TD.pixels[globalId] = single(abs(n.z)) << 16;
+    }
 }

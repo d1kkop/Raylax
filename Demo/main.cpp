@@ -20,11 +20,6 @@ double Time() { return static_cast<double>(duration_cast<duration<double, milli>
 // In LoadModel.cpp
 extern bool LoadModel(const std::string& name, vector<IMesh*>& meshes);
 
-// In trace.cpp
-void UpdateTraceData( const TraceData& td, QueueRayFptr queueRayFptr );
-RaySetupFptr GetSetupFptr();
-HitResultFptr GetHitFptr();
-
 
 struct Profiler
 {
@@ -50,7 +45,6 @@ struct Program
     vec3  camPos = vec3(0,0,-2.5f);
     mat3  camOrient;
     float kSpeed = 1.f;
-    TraceData td;
 
     void update(Profiler& pr)
     {
@@ -115,6 +109,7 @@ struct Program
     void render(u32 numRays, 
                 IRenderTarget* rt,
                 IGpuStaticScene* scene,
+                IDeviceBuffer* rays,
                 ITracer* tracer,
                 GLTextureBufferRenderer& glRenderer,
                 GLTextureBufferObject& glTbo,
@@ -154,11 +149,8 @@ struct Program
         {
             pr.start();
             {
-                td.eye    = camPos;
-                td.orient = camOrient;
-                td.pixels = rt->buffer<u32>();
-                UpdateTraceData( td, tracer->getQueueRayAddress() );
-                err = tracer->trace( numRays, scene, GetSetupFptr(), GetHitFptr() );
+                err = tracer->trace2( numRays, scene, &camPos.x, &camOrient[0][0], rays->ptr<const float>(), rt->buffer<u32>() );
+                // err = tracer->trace( numRays, scene, nullptr, nullptr );
                 assert(err==0);
             }
             SyncDevice();
@@ -263,11 +255,10 @@ int main(int argc, char** argv)
     rt->lock();
     double tBegin = Time();
     u32 numFrames = 0;
-    p.td.rayDirs  = primaryRays->ptr<vec3>();
     while ( !p.loopDone )
     {
         p.update( pr );
-        p.render( width*height, rt, scene, tracer, *glRenderer, *glRt, pr );
+        p.render( width*height, rt, scene, primaryRays, tracer, *glRenderer, *glRt, pr );
         SDL_GL_SwapWindow(sdl_window);
         if ( Time() - tBegin > 1000.0 )
         {

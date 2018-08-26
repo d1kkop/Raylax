@@ -8,6 +8,9 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Demo", "Demo\Demo.vcxproj", "{D20A2C7F-4AF2-4884-B8DD-F72CE7A76F73}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CudaTest", "CudaTest\CudaTest.vcxproj", "{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}"
+	ProjectSection(ProjectDependencies) = postProject
+		{39E77312-CE00-4695-B392-B0110E6EB695} = {39E77312-CE00-4695-B392-B0110E6EB695}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -53,8 +56,8 @@ Global
 		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Debug|x64.ActiveCfg = Debug|x64
 		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Debug|x64.Build.0 = Debug|x64
 		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Debug|x86.ActiveCfg = Debug|x64
-		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Profile|x64.ActiveCfg = Release|x64
-		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Profile|x64.Build.0 = Release|x64
+		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Profile|x64.ActiveCfg = Debug|x64
+		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Profile|x64.Build.0 = Debug|x64
 		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Profile|x86.ActiveCfg = Release|x64
 		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Profile|x86.Build.0 = Release|x64
 		{FBEBFD8E-39FC-44C4-A6D2-5B822E542E3F}.Release|x64.ActiveCfg = Release|x64
