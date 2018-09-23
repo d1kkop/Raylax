@@ -173,6 +173,7 @@
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\3rdParty\glatter-master\src\glatter\glatter.c" />
     <ClCompile Include="BoxTriangle.cpp" />
     <ClCompile Include="BvhNode2.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
@@ -202,7 +203,6 @@
     <ClInclude Include="Tracer.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\RaytracerCuda\3rdParty\glatter-master\src\glatter\glatter.c" />
     <ClCompile Include="BvhNode.cpp" />
     <ClCompile Include="DeviceBuffer.cpp" />
     <ClCompile Include="GpuStaticScene.cpp" />

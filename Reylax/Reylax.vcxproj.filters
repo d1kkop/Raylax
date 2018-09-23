@@ -48,9 +48,6 @@
     <ClCompile Include="RenderTarget.cpp">
       <Filter>Core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\RaytracerCuda\3rdParty\glatter-master\src\glatter\glatter.c">
-      <Filter>3rdParty</Filter>
-    </ClCompile>
     <ClCompile Include="Reylax.cpp">
       <Filter>Core</Filter>
     </ClCompile>
@@ -78,6 +75,9 @@
     </ClCompile>
     <ClCompile Include="BvhSidesMethods.cpp">
       <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\3rdParty\glatter-master\src\glatter\glatter.c">
+      <Filter>3rdParty</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
