@@ -1,0 +1,56 @@
+
+
+// GLM -> HACK to get rid of annotation warnings for defaulted constructors see setup.hpp line: 721
+#undef GLM_HAS_DEFAULTED_FUNCTIONS
+#define GLM_HAS_DEFAULTED_FUNCTIONS 0
+
+// For dynamic paralellism to work use compute 3.5 or higher and must compile with 'rdc=true' enabled in cuda options.
+
+
+RayBox march algorithm
+
+For each ray, determine for direction of ray (d.x, d.y and d.z) if is positive or negative.
+Store this in an array thus. For each component it will be either negative or positive, 0 or 1, we need only 3 bits for this per ray.
+But for now, lets store all 3 directions in a single char per ray. So every ray is a single byte.
+
+char* raySigns = new char[numRays];
+char raySign  = raySigns[ i ];
+char3 sign;
+sign.x = raySign & 1;
+sign.y = (raySign >> 1) & 1;
+sign.z = (raySign >> 2); // no ampersand necessary as leading bits are zero
+
+bounds are stored as:
+vec3 bounds[2] = { bMin, bMax };
+
+ro = rayOris[ i ]
+rd = rayDirs[ i ]
+sign = raySigns[ i ];
+rInvd = vec3(1/rd.x, 1/rd.y, 1/rd.z); // <-- precalculated
+
+u32 selectNextBox( const vec3* bounds, const u32* links, ro, rd, rinvd, sign )
+{
+	float xDist = (bounds[ sign[0] ] - ro.x) * rinvd.x;
+	float yDist = (bounds[ sign[1] ] - ro.y) * rinvd.y;
+	float zDist = (bounds[ sign[2] ] - ro.z) * rinvd.z;
+
+	// assume xDist being the biggest
+	u32 offset = 0;
+	u32 side   = 0;
+
+	bool bEval;
+
+	// check if yDist > xDist
+	bEval  = yDist > xDist;
+	xDist  = bEval? yDist : xDist;
+	offset = bEval? 2 : 0;
+	side   = bEval? 1 : 0;
+
+	// check if zDist > xDist, note: xDist was updated if yDist was bigger
+	bEval  = zDist > xDist;
+//	xDist  = bEval? zDist : xDist;
+	offset = bEval? 4 : offset;
+	side   = bEval? 2 : side;
+
+	return links[ offset + sign[side] ];
+}
